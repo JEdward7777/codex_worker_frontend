@@ -16,8 +16,22 @@
       {
         "command": "codex-worker.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "codex-worker.testGitLabConnection",
+        "title": "GPU Jobs: Test GitLab Connection"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Codex Worker",
+      "properties": {
+        "codex-worker.workerUserId": {
+          "type": "number",
+          "default": 551,
+          "description": "GitLab user ID of the GPU worker (default: 551)"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
