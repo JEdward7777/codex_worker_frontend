@@ -86,13 +86,20 @@ export class GitLabService {
 
         const gitConfig = fs.readFileSync(gitConfigPath, 'utf-8');
         
-        // Look for remote "origin" URL
-        const remoteMatch = gitConfig.match(/\[remote "origin"\]\s+url = (.+)/);
-        if (!remoteMatch) {
+        // Look for remote "origin" section and extract URL
+        // The URL might be on the same line or a subsequent line
+        const remoteSectionMatch = gitConfig.match(/\[remote "origin"\]([\s\S]*?)(?=\[|$)/);
+        if (!remoteSectionMatch) {
             return null;
         }
 
-        const remoteUrl = remoteMatch[1].trim();
+        const remoteSection = remoteSectionMatch[1];
+        const urlMatch = remoteSection.match(/url\s*=\s*(.+)/);
+        if (!urlMatch) {
+            return null;
+        }
+
+        const remoteUrl = urlMatch[1].trim();
         
         // Parse project path from URL
         // HTTPS: https://git.genesisrnd.com/username/project-name.git
