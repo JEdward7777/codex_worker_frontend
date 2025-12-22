@@ -46,9 +46,11 @@ exports.deactivate = deactivate;
 const vscode = __importStar(__webpack_require__(1));
 const GitLabService_1 = __webpack_require__(2);
 const ManifestService_1 = __webpack_require__(5);
+const AudioDiscoveryService_1 = __webpack_require__(31);
 // Global service instances
 let gitLabService;
 let manifestService;
+let audioDiscoveryService;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 function activate(context) {
@@ -56,8 +58,14 @@ function activate(context) {
     // This line of code will only be executed once when your extension is activated
     console.log('Codex Worker extension is now active!');
     // Initialize services
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) {
+        vscode.window.showErrorMessage('No workspace folder found. Please open a folder first.');
+        return;
+    }
     gitLabService = new GitLabService_1.GitLabService();
     manifestService = new ManifestService_1.ManifestService();
+    audioDiscoveryService = new AudioDiscoveryService_1.AudioDiscoveryService(workspaceRoot);
     // Register hello world command (for testing)
     const helloWorldDisposable = vscode.commands.registerCommand('codex-worker.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from codex-worker!');
@@ -148,7 +156,53 @@ function activate(context) {
             console.error('Manifest test error:', error);
         }
     });
-    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable);
+    // Register audio discovery test command
+    const testAudioDiscoveryDisposable = vscode.commands.registerCommand('codex-worker.testAudioDiscovery', async () => {
+        try {
+            vscode.window.showInformationMessage('Testing audio discovery...');
+            // Discover all audio
+            const summary = await audioDiscoveryService.discoverAudio({
+                validateFiles: true
+            });
+            // Show summary
+            vscode.window.showInformationMessage(`✓ Found ${summary.totalVerses} verses in ${summary.books.length} book(s)`);
+            vscode.window.showInformationMessage(`✓ Audio coverage: ${summary.versesWithAudio}/${summary.totalVerses} verses (${Math.round(summary.versesWithAudio / summary.totalVerses * 100)}%)`);
+            // Show per-book breakdown
+            for (const book of summary.books) {
+                const totalVerses = summary.versesByBook.get(book) || 0;
+                const audioVerses = summary.audioByBook.get(book) || 0;
+                const percentage = totalVerses > 0 ? Math.round(audioVerses / totalVerses * 100) : 0;
+                vscode.window.showInformationMessage(`  ${book}: ${audioVerses}/${totalVerses} verses (${percentage}%)`);
+            }
+            // Validate audio sufficiency
+            const validation = audioDiscoveryService.validateAudioSufficiency(summary, 10);
+            if (validation.sufficient) {
+                vscode.window.showInformationMessage(`✓ ${validation.message}`);
+            }
+            else {
+                vscode.window.showWarningMessage(`⚠ ${validation.message}`);
+            }
+            // Show missing audio if any
+            if (summary.versesWithoutAudio > 0) {
+                const showMissing = await vscode.window.showInformationMessage(`${summary.versesWithoutAudio} verses are missing audio. Show details?`, 'Yes', 'No');
+                if (showMissing === 'Yes') {
+                    const missingVerses = summary.verses
+                        .filter(v => !v.hasAudio)
+                        .slice(0, 10) // Show first 10
+                        .map(v => v.verseRef)
+                        .join(', ');
+                    vscode.window.showInformationMessage(`Missing audio (first 10): ${missingVerses}${summary.versesWithoutAudio > 10 ? '...' : ''}`);
+                }
+            }
+            vscode.window.showInformationMessage('✓ Audio discovery test completed successfully!');
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Audio discovery test failed: ${errorMessage}`);
+            console.error('Audio discovery test error:', error);
+        }
+    });
+    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable);
 }
 // This method is called when your extension is deactivated
 function deactivate() { }
@@ -4790,6 +4844,335 @@ function dump(input, options) {
 
 module.exports.dump = dump;
 
+
+/***/ }),
+/* 31 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Audio Discovery Service
+ *
+ * Scans .codex files and extracts audio/text pairs for TTS training
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AudioDiscoveryService = void 0;
+const path = __importStar(__webpack_require__(4));
+const fs = __importStar(__webpack_require__(32));
+class AudioDiscoveryService {
+    workspaceRoot;
+    constructor(workspaceRoot) {
+        this.workspaceRoot = workspaceRoot;
+    }
+    /**
+     * Discover all audio/text pairs from .codex files
+     */
+    async discoverAudio(options = {}) {
+        const baseDir = options.baseDir || './files/target';
+        const basePath = path.join(this.workspaceRoot, baseDir);
+        // Find all .codex files
+        const codexFiles = await this.findCodexFiles(basePath);
+        if (codexFiles.length === 0) {
+            throw new Error(`No .codex files found in ${baseDir}`);
+        }
+        // Parse all .codex files and extract verses
+        const allVerses = [];
+        const books = new Set();
+        const versesByBook = new Map();
+        const audioByBook = new Map();
+        for (const codexFilePath of codexFiles) {
+            const verses = await this.parseCodexFile(codexFilePath, options);
+            for (const verse of verses) {
+                // Apply filters
+                if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
+                    continue;
+                }
+                if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
+                    continue;
+                }
+                allVerses.push(verse);
+                books.add(verse.book);
+                // Update counts
+                versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
+                if (verse.hasAudio) {
+                    audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
+                }
+            }
+        }
+        // Sort verses by book, chapter, verse
+        allVerses.sort((a, b) => {
+            if (a.book !== b.book)
+                return a.book.localeCompare(b.book);
+            if (a.chapter !== b.chapter)
+                return a.chapter - b.chapter;
+            return a.verse - b.verse;
+        });
+        const versesWithAudio = allVerses.filter(v => v.hasAudio).length;
+        return {
+            totalVerses: allVerses.length,
+            versesWithAudio,
+            versesWithoutAudio: allVerses.length - versesWithAudio,
+            verses: allVerses,
+            books: Array.from(books).sort(),
+            versesByBook,
+            audioByBook
+        };
+    }
+    /**
+     * Find all .codex files in the specified directory
+     */
+    async findCodexFiles(baseDir) {
+        const codexFiles = [];
+        try {
+            await this.findCodexFilesRecursive(baseDir, codexFiles);
+        }
+        catch (error) {
+            if (error.code === 'ENOENT') {
+                throw new Error(`Directory not found: ${baseDir}`);
+            }
+            throw error;
+        }
+        return codexFiles;
+    }
+    /**
+     * Recursively find .codex files
+     */
+    async findCodexFilesRecursive(dir, results) {
+        try {
+            const entries = await fs.readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    await this.findCodexFilesRecursive(fullPath, results);
+                }
+                else if (entry.isFile() && entry.name.endsWith('.codex')) {
+                    results.push(fullPath);
+                }
+            }
+        }
+        catch (error) {
+            // Skip directories we can't read
+            console.warn(`Could not read directory ${dir}:`, error);
+        }
+    }
+    /**
+     * Parse a single .codex file and extract verse audio information
+     */
+    async parseCodexFile(filePath, options) {
+        const verses = [];
+        try {
+            // Read and parse the .codex file
+            const content = await fs.readFile(filePath, 'utf-8');
+            const codexData = JSON.parse(content);
+            // Extract book name from filename (e.g., "JHN.codex" -> "JHN")
+            const fileName = path.basename(filePath, '.codex');
+            const book = fileName.toUpperCase();
+            // Process each cell
+            for (const cell of codexData.cells) {
+                const verse = await this.extractVerseFromCell(cell, book, filePath, options);
+                if (verse) {
+                    verses.push(verse);
+                }
+            }
+        }
+        catch (error) {
+            console.error(`Error parsing .codex file ${filePath}:`, error);
+            throw new Error(`Failed to parse .codex file: ${filePath}`);
+        }
+        return verses;
+    }
+    /**
+     * Extract verse information from a .codex cell
+     */
+    async extractVerseFromCell(cell, book, codexFilePath, options) {
+        // Only process text cells
+        if (cell.metadata.type !== 'text') {
+            return null;
+        }
+        // Parse verse reference (e.g., "JHN 1:1", "1CH 2:3", "MAT 5:1-2")
+        // Format: BOOK CHAPTER:VERSE[-VERSE]
+        const verseRef = cell.metadata.id;
+        // Split by space to get book and chapter:verse
+        const parts = verseRef.split(' ');
+        if (parts.length !== 2) {
+            console.warn(`Invalid verse reference format (expected 'BOOK CHAPTER:VERSE'): ${verseRef}`);
+            return null;
+        }
+        const refBook = parts[0];
+        const chapterVerse = parts[1];
+        // Split by colon to get chapter and verse
+        const cvParts = chapterVerse.split(':');
+        if (cvParts.length !== 2) {
+            console.warn(`Invalid chapter:verse format: ${chapterVerse}`);
+            return null;
+        }
+        const chapterStr = cvParts[0];
+        const verseStr = cvParts[1];
+        // Parse chapter
+        const chapter = parseInt(chapterStr, 10);
+        if (isNaN(chapter)) {
+            console.warn(`Invalid chapter number: ${chapterStr}`);
+            return null;
+        }
+        // Parse verse (may be a range like "1-2", we'll take the first verse)
+        // For verse ranges, we store the first verse number
+        const verseParts = verseStr.split('-');
+        const verse = parseInt(verseParts[0], 10);
+        if (isNaN(verse)) {
+            console.warn(`Invalid verse number: ${verseStr}`);
+            return null;
+        }
+        // Check for audio
+        let hasAudio = false;
+        let audioPath;
+        let audioId;
+        if (cell.metadata.attachments && cell.metadata.selectedAudioId) {
+            const selectedAudio = cell.metadata.attachments[cell.metadata.selectedAudioId];
+            if (selectedAudio && !selectedAudio.isDeleted) {
+                audioId = cell.metadata.selectedAudioId;
+                // The URL in the .codex file is relative to the project root
+                // e.g., ".project/attachments/files/JHN/audio-xxx.webm"
+                const relativeAudioPath = selectedAudio.url;
+                // Convert to absolute path
+                const absoluteAudioPath = path.join(path.dirname(codexFilePath), '..', '..', relativeAudioPath);
+                // Validate file exists if requested
+                if (options.validateFiles) {
+                    try {
+                        await fs.access(absoluteAudioPath);
+                        hasAudio = true;
+                        audioPath = relativeAudioPath;
+                    }
+                    catch {
+                        // File doesn't exist
+                        hasAudio = false;
+                    }
+                }
+                else {
+                    // Assume it exists
+                    hasAudio = true;
+                    audioPath = relativeAudioPath;
+                }
+            }
+        }
+        return {
+            verseRef,
+            book: refBook,
+            chapter,
+            verse,
+            text: cell.value,
+            hasAudio,
+            audioPath,
+            audioId
+        };
+    }
+    /**
+     * Check if a verse matches the specified verse range
+     */
+    matchesVerseRange(verse, range) {
+        if (verse.book !== range.book) {
+            return false;
+        }
+        if (range.startChapter !== undefined && verse.chapter < range.startChapter) {
+            return false;
+        }
+        if (range.endChapter !== undefined && verse.chapter > range.endChapter) {
+            return false;
+        }
+        // If we're in the start chapter, check start verse
+        if (range.startChapter !== undefined &&
+            verse.chapter === range.startChapter &&
+            range.startVerse !== undefined &&
+            verse.verse < range.startVerse) {
+            return false;
+        }
+        // If we're in the end chapter, check end verse
+        if (range.endChapter !== undefined &&
+            verse.chapter === range.endChapter &&
+            range.endVerse !== undefined &&
+            verse.verse > range.endVerse) {
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Get a summary of missing audio for a specific book
+     */
+    async getMissingAudio(book) {
+        const summary = await this.discoverAudio({ filterBooks: [book] });
+        return summary.verses.filter(v => !v.hasAudio);
+    }
+    /**
+     * Get verses with audio for a specific book and chapter range
+     */
+    async getVersesWithAudio(book, startChapter, endChapter) {
+        const summary = await this.discoverAudio({
+            filterBooks: [book],
+            verseRange: {
+                book,
+                startChapter,
+                endChapter
+            }
+        });
+        return summary.verses.filter(v => v.hasAudio);
+    }
+    /**
+     * Validate audio sufficiency for training
+     * Returns true if there are enough audio samples
+     */
+    validateAudioSufficiency(summary, minSamples = 10) {
+        const count = summary.versesWithAudio;
+        const sufficient = count >= minSamples;
+        return {
+            sufficient,
+            count,
+            required: minSamples,
+            message: sufficient
+                ? `Found ${count} audio samples (minimum ${minSamples} required)`
+                : `Insufficient audio: found ${count}, need at least ${minSamples} samples`
+        };
+    }
+}
+exports.AudioDiscoveryService = AudioDiscoveryService;
+
+
+/***/ }),
+/* 32 */
+/***/ ((module) => {
+
+module.exports = require("fs/promises");
 
 /***/ })
 /******/ 	]);

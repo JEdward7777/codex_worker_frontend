@@ -24,6 +24,10 @@
       {
         "command": "codex-worker.testManifestGeneration",
         "title": "GPU Jobs: Test Manifest Generation"
+      },
+      {
+        "command": "codex-worker.testAudioDiscovery",
+        "title": "GPU Jobs: Test Audio Discovery"
       }
     ],
     "configuration": {

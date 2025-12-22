@@ -57,17 +57,39 @@
 - `package.json` - Added test command and js-yaml dependencies
 - `PHASE2_COMPLETE.md` - Phase 2 documentation
 
-### Current Status: Ready for Phase 3
+### Phase 3: Audio Discovery - ✅ COMPLETE
 
-### Phase 3: Audio Discovery - 🔄 NEXT
+#### Completed Items
+- ✅ Created audio type definitions (`src/types/audio.ts`)
+- ✅ Created AudioDiscoveryService (`src/services/AudioDiscoveryService.ts`)
+- ✅ Implemented .codex file discovery in `./files/target/**/*.codex`
+- ✅ Implemented JSON cell parsing to extract audio references
+- ✅ Implemented audio file validation (checks `.project/attachments/files/`)
+- ✅ Implemented audio/text pair counting for training
+- ✅ Implemented verse identification parsing (Book Chapter:Verse format)
+- ✅ Added audio sufficiency validation
+- ✅ Created test command: "GPU Jobs: Test Audio Discovery"
+- ✅ Fixed verse parsing to handle books with numbers (1CH, 2CH, etc.)
+- ✅ Fixed verse parsing to handle verse ranges (e.g., "MAT 5:1-2")
+- ✅ Successfully tested with real .codex files
 
-#### Planned Tasks
-1. Implement .codex file discovery in `./files/target/**/*.codex`
-2. Parse .codex JSON cells to extract audio references
-3. Validate audio file existence
-4. Count audio/text pairs for training
-5. Implement verse identification (Book.Chapter.Verse format)
-6. Add audio sufficiency validation
+#### Key Implementation Details
+- **Codex File Location**: `./files/target/**/*.codex`
+- **Audio File Location**: `.project/attachments/files/{BOOK}/audio-*.webm`
+- **Git LFS Pointers**: `.project/attachments/pointers/{BOOK}/` (130-byte files)
+- **Verse Reference Format**: `BOOK CHAPTER:VERSE` (e.g., "JHN 1:1", "1CH 2:3", "MAT 5:1-2")
+- **Verse Parsing**: Flexible parsing using string split (handles numbered books and verse ranges)
+- **Audio Selection**: Uses `selectedAudioId` from cell metadata
+- **Deleted Audio**: Filters out audio with `isDeleted: true`
+- **Statistics**: Per-book breakdown and overall coverage percentage
+
+#### Files Created/Modified
+- `src/types/audio.ts` - Audio type definitions (115 lines)
+- `src/services/AudioDiscoveryService.ts` - Audio discovery service (310 lines)
+- `src/extension.ts` - Added AudioDiscoveryService and test command
+- `package.json` - Added test command
+
+### Current Status: Ready for Phase 4
 
 ### Key Decisions Made
 1. **Model Type**: StableTTS (primary focus)
@@ -76,9 +98,23 @@
 4. **Verse Identification**: Book = 3-letter .codex filename, Chapter/Verse = JSON structure
 5. **Implementation Order**: GitLab → Manifest → Audio Discovery → UI → State Management
 
-### Information Still Needed
-- .codex file structure examples (when implementing Phase 3)
-- Specific audio file path resolution logic (when implementing Phase 3)
+### Phase 4: UI Implementation - 🔄 NEXT
+
+#### Planned Tasks
+1. Create sidebar panel with job list
+2. Implement "New Job" button and dialog flow
+3. Create confirmation pane showing:
+   - Number of audio/text pairs
+   - Missing recordings
+   - Training vs inference vs both
+   - Model selection (new vs existing)
+   - Epoch count
+   - Inference verse inclusion/exclusion
+4. Add warnings for:
+   - Another job already running
+   - Insufficient audio for training
+5. Implement job state visualization (icons/colors)
+6. Display worker name and epoch progress
 
 ### Testing Status
 - ✅ Extension compiles successfully
@@ -89,8 +125,12 @@
 - ✅ Manifest read/write works
 - ✅ Job ID generation works
 - ✅ Job state detection works
+- ✅ Audio discovery works
+- ✅ Verse parsing handles numbered books (1CH, 2CH, etc.)
+- ✅ Verse parsing handles verse ranges (MAT 5:1-2)
+- ✅ Audio file validation works
 - ⏳ Actual project sharing/unsharing (ready to test when needed)
-- ⏳ Audio discovery (Phase 3)
+- ⏳ UI implementation (Phase 4)
 
 ### Notes
 - This is a multi-session project

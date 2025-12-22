@@ -3,10 +3,12 @@
 import * as vscode from 'vscode';
 import { GitLabService } from './services/GitLabService';
 import { ManifestService } from './services/ManifestService';
+import { AudioDiscoveryService } from './services/AudioDiscoveryService';
 
 // Global service instances
 let gitLabService: GitLabService;
 let manifestService: ManifestService;
+let audioDiscoveryService: AudioDiscoveryService;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -17,8 +19,15 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Codex Worker extension is now active!');
 
 	// Initialize services
+	const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	if (!workspaceRoot) {
+		vscode.window.showErrorMessage('No workspace folder found. Please open a folder first.');
+		return;
+	}
+
 	gitLabService = new GitLabService();
 	manifestService = new ManifestService();
+	audioDiscoveryService = new AudioDiscoveryService(workspaceRoot);
 
 	// Register hello world command (for testing)
 	const helloWorldDisposable = vscode.commands.registerCommand('codex-worker.helloWorld', () => {
@@ -131,7 +140,77 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable);
+	// Register audio discovery test command
+	const testAudioDiscoveryDisposable = vscode.commands.registerCommand('codex-worker.testAudioDiscovery', async () => {
+		try {
+			vscode.window.showInformationMessage('Testing audio discovery...');
+
+			// Discover all audio
+			const summary = await audioDiscoveryService.discoverAudio({
+				validateFiles: true
+			});
+
+			// Show summary
+			vscode.window.showInformationMessage(
+				`✓ Found ${summary.totalVerses} verses in ${summary.books.length} book(s)`
+			);
+			vscode.window.showInformationMessage(
+				`✓ Audio coverage: ${summary.versesWithAudio}/${summary.totalVerses} verses (${Math.round(summary.versesWithAudio / summary.totalVerses * 100)}%)`
+			);
+
+			// Show per-book breakdown
+			for (const book of summary.books) {
+				const totalVerses = summary.versesByBook.get(book) || 0;
+				const audioVerses = summary.audioByBook.get(book) || 0;
+				const percentage = totalVerses > 0 ? Math.round(audioVerses / totalVerses * 100) : 0;
+				vscode.window.showInformationMessage(
+					`  ${book}: ${audioVerses}/${totalVerses} verses (${percentage}%)`
+				);
+			}
+
+			// Validate audio sufficiency
+			const validation = audioDiscoveryService.validateAudioSufficiency(summary, 10);
+			if (validation.sufficient) {
+				vscode.window.showInformationMessage(`✓ ${validation.message}`);
+			} else {
+				vscode.window.showWarningMessage(`⚠ ${validation.message}`);
+			}
+
+			// Show missing audio if any
+			if (summary.versesWithoutAudio > 0) {
+				const showMissing = await vscode.window.showInformationMessage(
+					`${summary.versesWithoutAudio} verses are missing audio. Show details?`,
+					'Yes', 'No'
+				);
+
+				if (showMissing === 'Yes') {
+					const missingVerses = summary.verses
+						.filter(v => !v.hasAudio)
+						.slice(0, 10)  // Show first 10
+						.map(v => v.verseRef)
+						.join(', ');
+					
+					vscode.window.showInformationMessage(
+						`Missing audio (first 10): ${missingVerses}${summary.versesWithoutAudio > 10 ? '...' : ''}`
+					);
+				}
+			}
+
+			vscode.window.showInformationMessage('✓ Audio discovery test completed successfully!');
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Audio discovery test failed: ${errorMessage}`);
+			console.error('Audio discovery test error:', error);
+		}
+	});
+
+	context.subscriptions.push(
+		helloWorldDisposable,
+		testGitLabDisposable,
+		testManifestDisposable,
+		testAudioDiscoveryDisposable
+	);
 }
 
 // This method is called when your extension is deactivated
