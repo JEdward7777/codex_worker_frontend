@@ -3,6 +3,7 @@
 ## Latest Session: 2025-12-22
 
 ### Phase 1: GitLab Integration - ✅ COMPLETE
+### Phase 2: Core Manifest Generation - ✅ COMPLETE
 
 #### Completed Items
 - ✅ Created GitLabService (`src/services/GitLabService.ts`)
@@ -27,16 +28,46 @@
 - `package.json` - Added configuration and test command
 - `PHASE1_COMPLETE.md` - Phase 1 documentation
 
-### Current Status: Ready for Phase 2
+### Phase 2: Core Manifest Generation - ✅ COMPLETE
 
-### Phase 2: Core Manifest Generation - 🔄 NEXT
+#### Completed Items
+- ✅ Created manifest type definitions (`src/types/manifest.ts`)
+- ✅ Created ManifestService (`src/services/ManifestService.ts`)
+- ✅ Implemented manifest.yaml structure with version 1
+- ✅ Implemented job ID generation (timestamp + random)
+- ✅ Added StableTTS model type support
+- ✅ Implemented manifest read/write utilities using js-yaml
+- ✅ Added comprehensive manifest validation
+- ✅ Created test command: "GPU Jobs: Test Manifest Generation"
+- ✅ Implemented job state detection from filesystem
+- ✅ Successfully compiled with no TypeScript errors
+
+#### Key Implementation Details
+- **Manifest Location**: `./gpu_jobs/manifest.yaml`
+- **Manifest Version**: 1
+- **Job ID Format**: `{timestamp}_{random}` (e.g., `1a2b3c4d5e_f6g7h8i9j0k`)
+- **YAML Library**: js-yaml for parsing and generation
+- **State Detection**: Filesystem-based (checks job folders and response.yaml)
+- **Validation**: Comprehensive validation on read/write operations
+
+#### Files Created/Modified
+- `src/types/manifest.ts` - Type definitions (67 lines)
+- `src/services/ManifestService.ts` - Manifest service (310 lines)
+- `src/extension.ts` - Added ManifestService and test command
+- `package.json` - Added test command and js-yaml dependencies
+- `PHASE2_COMPLETE.md` - Phase 2 documentation
+
+### Current Status: Ready for Phase 3
+
+### Phase 3: Audio Discovery - 🔄 NEXT
 
 #### Planned Tasks
-1. Create manifest.yaml structure with version 1
-2. Implement job ID generation (random unique)
-3. Add StableTTS model type support
-4. Implement manifest read/write utilities
-5. Add manifest validation
+1. Implement .codex file discovery in `./files/target/**/*.codex`
+2. Parse .codex JSON cells to extract audio references
+3. Validate audio file existence
+4. Count audio/text pairs for training
+5. Implement verse identification (Book.Chapter.Verse format)
+6. Add audio sufficiency validation
 
 ### Key Decisions Made
 1. **Model Type**: StableTTS (primary focus)
@@ -54,7 +85,12 @@
 - ✅ GitLab authentication works
 - ✅ Project detection from .git/config works
 - ✅ Worker membership check works
+- ✅ Manifest generation works
+- ✅ Manifest read/write works
+- ✅ Job ID generation works
+- ✅ Job state detection works
 - ⏳ Actual project sharing/unsharing (ready to test when needed)
+- ⏳ Audio discovery (Phase 3)
 
 ### Notes
 - This is a multi-session project
