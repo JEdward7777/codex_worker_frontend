@@ -12,6 +12,23 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gpu-jobs",
+          "title": "GPU Jobs",
+          "icon": "$(server-process)"
+        }
+      ]
+    },
+    "views": {
+      "gpu-jobs": [
+        {
+          "id": "codex-worker-jobs",
+          "name": "Jobs"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "codex-worker.helloWorld",
@@ -28,8 +45,44 @@
       {
         "command": "codex-worker.testAudioDiscovery",
         "title": "GPU Jobs: Test Audio Discovery"
+      },
+      {
+        "command": "codex-worker.refreshJobs",
+        "title": "Refresh Jobs",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codex-worker.newJob",
+        "title": "New Job",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codex-worker.cancelJob",
+        "title": "Cancel Job",
+        "icon": "$(close)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codex-worker.refreshJobs",
+          "when": "view == codex-worker-jobs",
+          "group": "navigation"
+        },
+        {
+          "command": "codex-worker.newJob",
+          "when": "view == codex-worker-jobs",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codex-worker.cancelJob",
+          "when": "view == codex-worker-jobs && viewItem =~ /cancelable/",
+          "group": "inline"
+        }
+      ]
+    },
     "configuration": {
       "title": "Codex Worker",
       "properties": {

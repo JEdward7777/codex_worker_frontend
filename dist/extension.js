@@ -47,10 +47,15 @@ const vscode = __importStar(__webpack_require__(1));
 const GitLabService_1 = __webpack_require__(2);
 const ManifestService_1 = __webpack_require__(5);
 const AudioDiscoveryService_1 = __webpack_require__(31);
+const PreflightService_1 = __webpack_require__(33);
+const JobTreeDataProvider_1 = __webpack_require__(34);
+const NewJobWizard_1 = __webpack_require__(35);
 // Global service instances
 let gitLabService;
 let manifestService;
 let audioDiscoveryService;
+let preflightService;
+let jobTreeDataProvider;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 function activate(context) {
@@ -66,6 +71,14 @@ function activate(context) {
     gitLabService = new GitLabService_1.GitLabService();
     manifestService = new ManifestService_1.ManifestService();
     audioDiscoveryService = new AudioDiscoveryService_1.AudioDiscoveryService(workspaceRoot);
+    preflightService = new PreflightService_1.PreflightService(audioDiscoveryService, manifestService, gitLabService);
+    // Initialize tree data provider
+    jobTreeDataProvider = new JobTreeDataProvider_1.JobTreeDataProvider(workspaceRoot, manifestService);
+    // Register tree view
+    const treeView = vscode.window.createTreeView('codex-worker-jobs', {
+        treeDataProvider: jobTreeDataProvider,
+        showCollapseAll: false
+    });
     // Register hello world command (for testing)
     const helloWorldDisposable = vscode.commands.registerCommand('codex-worker.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from codex-worker!');
@@ -202,7 +215,84 @@ function activate(context) {
             console.error('Audio discovery test error:', error);
         }
     });
-    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable);
+    // Register refresh jobs command
+    const refreshJobsDisposable = vscode.commands.registerCommand('codex-worker.refreshJobs', async () => {
+        await jobTreeDataProvider.refresh();
+        vscode.window.showInformationMessage('Job list refreshed');
+    });
+    // Register new job command
+    const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
+        try {
+            const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService);
+            const jobParams = await wizard.run();
+            if (!jobParams) {
+                // User cancelled
+                return;
+            }
+            // Run preflight checks
+            const preflightResult = await preflightService.performChecks(jobParams);
+            // Show confirmation with preflight results
+            const confirmed = await wizard.showConfirmation(jobParams, preflightResult);
+            if (!confirmed) {
+                return;
+            }
+            // Create the job
+            const jobId = manifestService.generateJobId();
+            const job = {
+                job_id: jobId,
+                job_type: 'tts',
+                mode: jobParams.mode,
+                model: {
+                    type: jobParams.modelType,
+                    base_checkpoint: jobParams.baseCheckpoint
+                },
+                epochs: jobParams.epochs,
+                inference: (jobParams.includeVerses || jobParams.excludeVerses) ? {
+                    include_verses: jobParams.includeVerses,
+                    exclude_verses: jobParams.excludeVerses
+                } : undefined,
+                voice_reference: jobParams.voiceReference,
+                canceled: false
+            };
+            // Add job to manifest
+            await manifestService.addJob(job);
+            // Share project with worker
+            await gitLabService.shareProjectWithWorker();
+            // Refresh the tree view
+            await jobTreeDataProvider.refresh();
+            vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
+            console.error('New job error:', error);
+        }
+    });
+    // Register cancel job command
+    const cancelJobDisposable = vscode.commands.registerCommand('codex-worker.cancelJob', async (jobItem) => {
+        try {
+            if (!jobItem || !jobItem.job) {
+                vscode.window.showErrorMessage('No job selected');
+                return;
+            }
+            const jobId = jobItem.job.job_id;
+            const confirm = await vscode.window.showWarningMessage(`Cancel job ${jobId}?`, { modal: true }, 'Yes', 'No');
+            if (confirm !== 'Yes') {
+                return;
+            }
+            // Cancel the job
+            await manifestService.cancelJob(jobId);
+            // Refresh the tree view
+            await jobTreeDataProvider.refresh();
+            vscode.window.showInformationMessage(`✓ Job ${jobId} cancelled`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to cancel job: ${errorMessage}`);
+            console.error('Cancel job error:', error);
+        }
+    });
+    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, treeView, refreshJobsDisposable, newJobDisposable, cancelJobDisposable);
 }
 // This method is called when your extension is deactivated
 function deactivate() { }
@@ -4934,10 +5024,12 @@ class AudioDiscoveryService {
         }
         // Sort verses by book, chapter, verse
         allVerses.sort((a, b) => {
-            if (a.book !== b.book)
+            if (a.book !== b.book) {
                 return a.book.localeCompare(b.book);
-            if (a.chapter !== b.chapter)
+            }
+            if (a.chapter !== b.chapter) {
                 return a.chapter - b.chapter;
+            }
             return a.verse - b.verse;
         });
         const versesWithAudio = allVerses.filter(v => v.hasAudio).length;
@@ -5173,6 +5265,893 @@ exports.AudioDiscoveryService = AudioDiscoveryService;
 /***/ ((module) => {
 
 module.exports = require("fs/promises");
+
+/***/ }),
+/* 33 */
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * Service for performing preflight checks before job submission
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PreflightService = void 0;
+/**
+ * Minimum recommended audio pairs for training
+ */
+const MIN_RECOMMENDED_AUDIO_PAIRS = 50;
+/**
+ * Service for validating job parameters before submission
+ */
+class PreflightService {
+    audioDiscoveryService;
+    manifestService;
+    gitlabService;
+    constructor(audioDiscoveryService, manifestService, gitlabService) {
+        this.audioDiscoveryService = audioDiscoveryService;
+        this.manifestService = manifestService;
+        this.gitlabService = gitlabService;
+    }
+    /**
+     * Perform all preflight checks for a job
+     */
+    async performChecks(params) {
+        const errors = [];
+        const warnings = [];
+        // Get audio statistics
+        const audioStats = await this.checkAudioData(params, errors, warnings);
+        // Check for running jobs
+        await this.checkRunningJobs(warnings);
+        // Check base model if specified
+        if (params.baseCheckpoint) {
+            await this.checkBaseModel(params.baseCheckpoint, errors);
+        }
+        // Check GitLab connectivity
+        await this.checkGitLabConnectivity(errors);
+        // Validate verse selection
+        if (params.includeVerses || params.excludeVerses) {
+            this.validateVerseSelection(params, warnings);
+        }
+        // Check if mode requires certain parameters
+        this.validateModeRequirements(params, errors);
+        return {
+            passed: errors.length === 0,
+            errors,
+            warnings,
+            audioStats
+        };
+    }
+    /**
+     * Check audio data availability and quality
+     */
+    async checkAudioData(params, errors, warnings) {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const totalPairs = summary.totalVerses;
+            const missingRecordings = summary.versesWithoutAudio;
+            const coveragePercentage = (summary.versesWithAudio / summary.totalVerses) * 100;
+            // For training modes, check if we have sufficient audio
+            if (params.mode === 'training' || params.mode === 'training_and_inference') {
+                if (summary.versesWithAudio === 0) {
+                    errors.push('No audio recordings found. Training requires audio data.');
+                }
+                else if (summary.versesWithAudio < MIN_RECOMMENDED_AUDIO_PAIRS) {
+                    warnings.push(`Only ${summary.versesWithAudio} audio recordings found. ` +
+                        `Recommended minimum: ${MIN_RECOMMENDED_AUDIO_PAIRS} for quality training.`);
+                }
+            }
+            // For inference mode, check if base model is specified
+            if (params.mode === 'inference' && !params.baseCheckpoint) {
+                errors.push('Inference mode requires a base checkpoint to be specified.');
+            }
+            return {
+                totalPairs,
+                missingRecordings,
+                coveragePercentage
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(`Failed to analyze audio data: ${errorMessage}`);
+            return {
+                totalPairs: 0,
+                missingRecordings: 0,
+                coveragePercentage: 0
+            };
+        }
+    }
+    /**
+     * Check if there are already running jobs
+     */
+    async checkRunningJobs(warnings) {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            const runningJobs = jobs.filter(job => job.state === 'running');
+            if (runningJobs.length > 0) {
+                warnings.push(`${runningJobs.length} job(s) already running. ` +
+                    `Submitting another job may compete for GPU resources.`);
+            }
+            const pendingJobs = jobs.filter(job => job.state === 'pending');
+            if (pendingJobs.length > 0) {
+                warnings.push(`${pendingJobs.length} job(s) pending. ` +
+                    `New job will be queued after existing jobs.`);
+            }
+        }
+        catch (error) {
+            // Non-critical - just skip this check
+            console.warn('Failed to check running jobs:', error);
+        }
+    }
+    /**
+     * Check if base model exists (basic validation)
+     */
+    async checkBaseModel(checkpoint, errors) {
+        // For now, just do basic validation
+        // In the future, could check if the checkpoint file/job actually exists
+        if (!checkpoint || checkpoint.trim().length === 0) {
+            errors.push('Base checkpoint path cannot be empty.');
+            return;
+        }
+        // Check if it looks like a valid path or job ID
+        const isJobId = checkpoint.startsWith('job_');
+        const isPath = checkpoint.includes('/') || checkpoint.includes('\\') || checkpoint.endsWith('.pt');
+        if (!isJobId && !isPath) {
+            errors.push(`Base checkpoint "${checkpoint}" doesn't look like a valid path or job ID. ` +
+                `Expected format: "job_xxx" or "path/to/model.pt"`);
+        }
+    }
+    /**
+     * Check GitLab connectivity and project sharing capability
+     */
+    async checkGitLabConnectivity(errors) {
+        try {
+            // Check if we can get the project ID
+            const projectId = await this.gitlabService.getProjectIdFromWorkspace();
+            if (!projectId) {
+                errors.push('Cannot detect GitLab project. ' +
+                    'Make sure this is a Git repository with a GitLab remote.');
+                return;
+            }
+            // Check if worker is already a member (non-blocking)
+            const isMember = await this.gitlabService.isWorkerMember();
+            if (!isMember) {
+                // This is fine - we'll add them when submitting the job
+                console.log('Worker is not yet a project member (will be added on job submission)');
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(`GitLab connectivity check failed: ${errorMessage}`);
+        }
+    }
+    /**
+     * Validate verse selection parameters
+     */
+    validateVerseSelection(params, warnings) {
+        if (params.includeVerses && params.excludeVerses) {
+            warnings.push('Both include and exclude verse lists specified. ' +
+                'Include list will take precedence.');
+        }
+        if (params.includeVerses && params.includeVerses.length === 0) {
+            warnings.push('Include verse list is empty - no verses will be processed.');
+        }
+        // Basic format validation for verse references
+        const allVerses = [...(params.includeVerses || []), ...(params.excludeVerses || [])];
+        for (const verse of allVerses) {
+            if (!this.isValidVerseReference(verse)) {
+                warnings.push(`Verse reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE)`);
+            }
+        }
+    }
+    /**
+     * Validate that mode has required parameters
+     */
+    validateModeRequirements(params, errors) {
+        // Training modes require epochs
+        if ((params.mode === 'training' || params.mode === 'training_and_inference') && !params.epochs) {
+            errors.push('Training mode requires epoch count to be specified.');
+        }
+        // Inference mode requires base checkpoint
+        if (params.mode === 'inference' && !params.baseCheckpoint) {
+            errors.push('Inference mode requires a base checkpoint to be specified.');
+        }
+        // Validate epochs range
+        if (params.epochs !== undefined) {
+            if (params.epochs <= 0) {
+                errors.push('Epoch count must be greater than 0.');
+            }
+            if (params.epochs > 10000) {
+                errors.push('Epoch count seems unreasonably high (max: 10000).');
+            }
+        }
+    }
+    /**
+     * Basic validation for verse reference format
+     */
+    isValidVerseReference(verse) {
+        // Expected format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
+        // Examples: "JHN 1:1", "MAT 5:1-10", "1CH 2:3"
+        const pattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
+        return pattern.test(verse.trim());
+    }
+    /**
+     * Get a summary of audio coverage by book
+     */
+    async getAudioCoverageSummary() {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const lines = [];
+            lines.push(`Total Coverage: ${summary.versesWithAudio}/${summary.totalVerses} verses (${((summary.versesWithAudio / summary.totalVerses) * 100).toFixed(1)}%)`);
+            lines.push('');
+            lines.push('By Book:');
+            for (const book of summary.books) {
+                const totalInBook = summary.versesByBook.get(book) || 0;
+                const audioInBook = summary.audioByBook.get(book) || 0;
+                const coverage = totalInBook > 0 ? (audioInBook / totalInBook) * 100 : 0;
+                lines.push(`  ${book}: ${audioInBook}/${totalInBook} (${coverage.toFixed(1)}%)`);
+            }
+            return lines.join('\n');
+        }
+        catch (error) {
+            return 'Failed to get audio coverage summary';
+        }
+    }
+}
+exports.PreflightService = PreflightService;
+
+
+/***/ }),
+/* 34 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Tree data provider for the GPU Jobs sidebar
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.JobTreeDataProvider = exports.JobTreeItem = void 0;
+const vscode = __importStar(__webpack_require__(1));
+/**
+ * Tree item representing a single job in the sidebar
+ */
+class JobTreeItem extends vscode.TreeItem {
+    job;
+    collapsibleState;
+    constructor(job, collapsibleState) {
+        super(job.job_id, collapsibleState);
+        this.job = job;
+        this.collapsibleState = collapsibleState;
+        this.tooltip = this.buildTooltip();
+        this.description = this.buildDescription();
+        this.iconPath = this.getIconForState(job.state);
+        this.contextValue = this.getContextValue();
+    }
+    buildTooltip() {
+        const lines = [
+            `Job ID: ${this.job.job_id}`,
+            `Type: ${this.job.job_type}`,
+            `Mode: ${this.job.mode}`,
+            `State: ${this.job.state}`,
+            `Model: ${this.job.model.type}`
+        ];
+        if (this.job.model.base_checkpoint) {
+            lines.push(`Base: ${this.job.model.base_checkpoint}`);
+        }
+        if (this.job.epochs) {
+            const progress = this.job.epochs_completed
+                ? `${this.job.epochs_completed}/${this.job.epochs}`
+                : `0/${this.job.epochs}`;
+            lines.push(`Epochs: ${progress}`);
+        }
+        if (this.job.worker_id) {
+            lines.push(`Worker: ${this.job.worker_id}`);
+        }
+        if (this.job.inference) {
+            if (this.job.inference.include_verses) {
+                lines.push(`Include: ${this.job.inference.include_verses.length} verses`);
+            }
+            if (this.job.inference.exclude_verses) {
+                lines.push(`Exclude: ${this.job.inference.exclude_verses.length} verses`);
+            }
+        }
+        if (this.job.error_message) {
+            lines.push(`Error: ${this.job.error_message}`);
+        }
+        if (this.job.canceled) {
+            lines.push('⚠️ Canceled by user');
+        }
+        return lines.join('\n');
+    }
+    buildDescription() {
+        const parts = [];
+        // State indicator
+        parts.push(this.getStateEmoji(this.job.state));
+        // Worker name if claimed
+        if (this.job.worker_id) {
+            parts.push(`Worker: ${this.job.worker_id}`);
+        }
+        // Epoch progress if available
+        if (this.job.epochs && this.job.state === 'running') {
+            const progress = this.job.epochs_completed || 0;
+            parts.push(`${progress}/${this.job.epochs} epochs`);
+        }
+        // Mode
+        parts.push(this.job.mode);
+        return parts.join(' • ');
+    }
+    getStateEmoji(state) {
+        switch (state) {
+            case 'pending': return '⏳';
+            case 'running': return '▶️';
+            case 'completed': return '✅';
+            case 'failed': return '❌';
+            case 'canceled': return '🚫';
+            default: return '❓';
+        }
+    }
+    getIconForState(state) {
+        switch (state) {
+            case 'pending':
+                return new vscode.ThemeIcon('clock', new vscode.ThemeColor('charts.yellow'));
+            case 'running':
+                return new vscode.ThemeIcon('play', new vscode.ThemeColor('charts.blue'));
+            case 'completed':
+                return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+            case 'failed':
+                return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+            case 'canceled':
+                return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.gray'));
+            default:
+                return new vscode.ThemeIcon('question');
+        }
+    }
+    getContextValue() {
+        // Context value determines which commands are available in the context menu
+        const values = ['gpuJob'];
+        if (this.job.state === 'pending' || this.job.state === 'running') {
+            values.push('cancelable');
+        }
+        if (this.job.state === 'completed') {
+            values.push('completed');
+        }
+        return values.join(',');
+    }
+}
+exports.JobTreeItem = JobTreeItem;
+/**
+ * Tree data provider for GPU jobs
+ */
+class JobTreeDataProvider {
+    workspaceRoot;
+    manifestService;
+    _onDidChangeTreeData = new vscode.EventEmitter();
+    onDidChangeTreeData = this._onDidChangeTreeData.event;
+    constructor(workspaceRoot, manifestService) {
+        this.workspaceRoot = workspaceRoot;
+        this.manifestService = manifestService;
+    }
+    /**
+     * Refresh the tree view
+     */
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+    /**
+     * Get tree item for display
+     */
+    getTreeItem(element) {
+        return element;
+    }
+    /**
+     * Get children (jobs) for the tree
+     */
+    async getChildren(element) {
+        if (!this.workspaceRoot) {
+            vscode.window.showInformationMessage('No workspace folder open');
+            return [];
+        }
+        if (element) {
+            // No children for individual jobs (flat list)
+            return [];
+        }
+        try {
+            // Get all jobs with their states
+            const jobs = await this.manifestService.getJobsWithState();
+            if (jobs.length === 0) {
+                return [];
+            }
+            // Sort jobs: running first, then pending, then completed/failed/canceled
+            const sortedJobs = jobs.sort((a, b) => {
+                const stateOrder = {
+                    'running': 0,
+                    'pending': 1,
+                    'completed': 2,
+                    'failed': 3,
+                    'canceled': 4
+                };
+                const orderA = stateOrder[a.state] ?? 5;
+                const orderB = stateOrder[b.state] ?? 5;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
+                }
+                // Within same state, sort by job_id (newest first)
+                return b.job_id.localeCompare(a.job_id);
+            });
+            return sortedJobs.map((job) => new JobTreeItem(job, vscode.TreeItemCollapsibleState.None));
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to load jobs: ${errorMessage}`);
+            return [];
+        }
+    }
+    /**
+     * Get the number of active jobs (pending or running)
+     */
+    async getActiveJobCount() {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            return jobs.filter((job) => job.state === 'pending' || job.state === 'running').length;
+        }
+        catch (error) {
+            return 0;
+        }
+    }
+    /**
+     * Check if there are any running jobs
+     */
+    async hasRunningJobs() {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            return jobs.some((job) => job.state === 'running');
+        }
+        catch (error) {
+            return false;
+        }
+    }
+}
+exports.JobTreeDataProvider = JobTreeDataProvider;
+
+
+/***/ }),
+/* 35 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Multi-step wizard for creating new GPU jobs
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NewJobWizard = void 0;
+const vscode = __importStar(__webpack_require__(1));
+/**
+ * Wizard for creating new jobs
+ */
+class NewJobWizard {
+    audioDiscoveryService;
+    manifestService;
+    constructor(audioDiscoveryService, manifestService) {
+        this.audioDiscoveryService = audioDiscoveryService;
+        this.manifestService = manifestService;
+    }
+    /**
+     * Run the job creation wizard
+     * Returns the created job parameters or null if canceled
+     */
+    async run() {
+        try {
+            // Step 1: Select job mode
+            const mode = await this.selectMode();
+            if (!mode) {
+                return null;
+            }
+            // Step 2: Select model type
+            const modelType = await this.selectModelType();
+            if (!modelType) {
+                return null;
+            }
+            // Step 3: Select base checkpoint (optional)
+            const baseCheckpoint = await this.selectBaseCheckpoint(mode);
+            if (baseCheckpoint === undefined) {
+                return null; // User canceled
+            }
+            // Step 4: Select epochs (if training)
+            let epochs;
+            if (mode === 'training' || mode === 'training_and_inference') {
+                epochs = await this.selectEpochs();
+                if (epochs === undefined) {
+                    return null;
+                }
+            }
+            // Step 5: Select verses (if inference)
+            let includeVerses;
+            let excludeVerses;
+            if (mode === 'inference' || mode === 'training_and_inference') {
+                const verseSelection = await this.selectVerses();
+                if (!verseSelection) {
+                    return null;
+                }
+                includeVerses = verseSelection.include;
+                excludeVerses = verseSelection.exclude;
+            }
+            // Step 6: Select voice reference (optional)
+            const voiceReference = await this.selectVoiceReference();
+            if (voiceReference === undefined) {
+                return null;
+            }
+            return {
+                mode,
+                modelType,
+                baseCheckpoint: baseCheckpoint || undefined,
+                epochs,
+                includeVerses,
+                excludeVerses,
+                voiceReference: voiceReference || undefined
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
+            return null;
+        }
+    }
+    /**
+     * Step 1: Select job mode
+     */
+    async selectMode() {
+        const items = [
+            {
+                label: 'Training',
+                description: 'Train a new TTS model',
+                detail: 'Creates a new model or fine-tunes an existing one'
+            },
+            {
+                label: 'Inference',
+                description: 'Generate audio from text',
+                detail: 'Uses an existing model to synthesize speech'
+            },
+            {
+                label: 'Training and Inference',
+                description: 'Train then generate audio',
+                detail: 'Trains a model and then runs inference on selected verses'
+            }
+        ];
+        const selected = await vscode.window.showQuickPick(items, {
+            title: 'Select Job Mode',
+            placeHolder: 'What would you like to do?'
+        });
+        if (!selected) {
+            return null;
+        }
+        const modeMap = {
+            'Training': 'training',
+            'Inference': 'inference',
+            'Training and Inference': 'training_and_inference'
+        };
+        return modeMap[selected.label];
+    }
+    /**
+     * Step 2: Select model type
+     */
+    async selectModelType() {
+        const items = [
+            {
+                label: 'StableTTS',
+                description: 'Stable Text-to-Speech model',
+                detail: 'High-quality TTS with good stability'
+            }
+        ];
+        const selected = await vscode.window.showQuickPick(items, {
+            title: 'Select Model Type',
+            placeHolder: 'Which TTS model would you like to use?'
+        });
+        if (!selected) {
+            return null;
+        }
+        return selected.label;
+    }
+    /**
+     * Step 3: Select base checkpoint (optional)
+     */
+    async selectBaseCheckpoint(mode) {
+        // For inference-only, base checkpoint is required
+        // For training, it's optional (fine-tuning vs new model)
+        const isRequired = mode === 'inference';
+        const items = [
+            {
+                label: '$(new-file) Train New Model',
+                description: 'Start from scratch',
+                detail: 'Create a brand new model without a base checkpoint'
+            },
+            {
+                label: '$(file) Use Existing Model',
+                description: 'Fine-tune or use existing',
+                detail: 'Select a previously trained model as the base'
+            }
+        ];
+        // For inference, remove the "new model" option
+        const availableItems = isRequired ? items.slice(1) : items;
+        const selected = await vscode.window.showQuickPick(availableItems, {
+            title: 'Base Model',
+            placeHolder: isRequired
+                ? 'Select an existing model for inference'
+                : 'Start from scratch or fine-tune an existing model?'
+        });
+        if (!selected) {
+            return undefined; // Canceled
+        }
+        if (selected.label.includes('New Model')) {
+            return null; // No base checkpoint
+        }
+        // Let user enter the checkpoint path/ID
+        const checkpoint = await vscode.window.showInputBox({
+            title: 'Base Checkpoint',
+            prompt: 'Enter the path or ID of the base model checkpoint',
+            placeHolder: 'e.g., models/my-model-epoch-100.pt or job_abc123',
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return 'Checkpoint path cannot be empty';
+                }
+                return null;
+            }
+        });
+        return checkpoint || undefined;
+    }
+    /**
+     * Step 4: Select number of epochs
+     */
+    async selectEpochs() {
+        const epochStr = await vscode.window.showInputBox({
+            title: 'Training Epochs',
+            prompt: 'How many epochs should the model train for?',
+            value: '100',
+            validateInput: (value) => {
+                const num = parseInt(value, 10);
+                if (isNaN(num) || num <= 0) {
+                    return 'Please enter a positive number';
+                }
+                if (num > 10000) {
+                    return 'Epoch count seems too high (max: 10000)';
+                }
+                return null;
+            }
+        });
+        if (!epochStr) {
+            return undefined;
+        }
+        return parseInt(epochStr, 10);
+    }
+    /**
+     * Step 5: Select verses for inference
+     */
+    async selectVerses() {
+        const items = [
+            {
+                label: '$(check-all) All Verses',
+                description: 'Generate audio for all verses',
+                detail: 'Process every verse in the project'
+            },
+            {
+                label: '$(list-selection) Specific Verses',
+                description: 'Choose which verses to include/exclude',
+                detail: 'Manually specify verse ranges'
+            }
+        ];
+        const selected = await vscode.window.showQuickPick(items, {
+            title: 'Verse Selection',
+            placeHolder: 'Which verses should be processed?'
+        });
+        if (!selected) {
+            return null;
+        }
+        if (selected.label.includes('All Verses')) {
+            return {}; // No filters
+        }
+        // Ask if they want to include or exclude
+        const filterType = await vscode.window.showQuickPick([
+            {
+                label: 'Include Specific Verses',
+                description: 'Only process these verses'
+            },
+            {
+                label: 'Exclude Specific Verses',
+                description: 'Process all except these verses'
+            }
+        ], {
+            title: 'Filter Type',
+            placeHolder: 'Include or exclude verses?'
+        });
+        if (!filterType) {
+            return null;
+        }
+        const isInclude = filterType.label.includes('Include');
+        const versesInput = await vscode.window.showInputBox({
+            title: isInclude ? 'Include Verses' : 'Exclude Verses',
+            prompt: 'Enter verse references (comma-separated)',
+            placeHolder: 'e.g., JHN 1:1, JHN 1:2-5, MAT 5:1',
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return 'Please enter at least one verse reference';
+                }
+                // Basic validation - could be more sophisticated
+                return null;
+            }
+        });
+        if (!versesInput) {
+            return null;
+        }
+        // Parse the comma-separated list
+        const verses = versesInput
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length > 0);
+        return isInclude
+            ? { include: verses }
+            : { exclude: verses };
+    }
+    /**
+     * Step 6: Select voice reference (optional)
+     */
+    async selectVoiceReference() {
+        const useReference = await vscode.window.showQuickPick([
+            {
+                label: '$(pass) Use Default Voice',
+                description: 'No specific voice reference'
+            },
+            {
+                label: '$(mic) Specify Voice Reference',
+                description: 'Use a specific audio file as reference'
+            }
+        ], {
+            title: 'Voice Reference',
+            placeHolder: 'Use a specific voice reference?'
+        });
+        if (!useReference) {
+            return undefined;
+        }
+        if (useReference.label.includes('Default')) {
+            return null;
+        }
+        const reference = await vscode.window.showInputBox({
+            title: 'Voice Reference',
+            prompt: 'Enter the path to the voice reference audio file',
+            placeHolder: 'e.g., .project/attachments/files/JHN/audio-1.webm',
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return 'Please enter a file path';
+                }
+                return null;
+            }
+        });
+        return reference || undefined;
+    }
+    /**
+     * Show confirmation dialog with job details and preflight checks
+     */
+    async showConfirmation(params, preflightResult) {
+        const lines = [];
+        // Job configuration
+        lines.push('**Job Configuration:**');
+        lines.push(`- Mode: ${params.mode}`);
+        lines.push(`- Model: ${params.modelType}`);
+        if (params.baseCheckpoint) {
+            lines.push(`- Base Checkpoint: ${params.baseCheckpoint}`);
+        }
+        if (params.epochs) {
+            lines.push(`- Epochs: ${params.epochs}`);
+        }
+        if (params.voiceReference) {
+            lines.push(`- Voice Reference: ${params.voiceReference}`);
+        }
+        lines.push('');
+        // Audio statistics
+        lines.push('**Audio Data:**');
+        lines.push(`- Total Pairs: ${preflightResult.audioStats.totalPairs}`);
+        lines.push(`- Missing Recordings: ${preflightResult.audioStats.missingRecordings}`);
+        lines.push(`- Coverage: ${preflightResult.audioStats.coveragePercentage.toFixed(1)}%`);
+        lines.push('');
+        // Verse selection
+        if (params.includeVerses && params.includeVerses.length > 0) {
+            lines.push(`**Include Verses:** ${params.includeVerses.length} verses`);
+        }
+        if (params.excludeVerses && params.excludeVerses.length > 0) {
+            lines.push(`**Exclude Verses:** ${params.excludeVerses.length} verses`);
+        }
+        // Warnings
+        if (preflightResult.warnings.length > 0) {
+            lines.push('');
+            lines.push('**⚠️ Warnings:**');
+            preflightResult.warnings.forEach(warning => {
+                lines.push(`- ${warning}`);
+            });
+        }
+        // Errors
+        if (preflightResult.errors.length > 0) {
+            lines.push('');
+            lines.push('**❌ Errors:**');
+            preflightResult.errors.forEach(error => {
+                lines.push(`- ${error}`);
+            });
+        }
+        const message = lines.join('\n');
+        // If there are errors, show error message and don't allow submission
+        if (!preflightResult.passed) {
+            await vscode.window.showErrorMessage('Cannot submit job due to validation errors:\n\n' + message, { modal: true });
+            return false;
+        }
+        // Show confirmation dialog
+        const action = await vscode.window.showInformationMessage(message, { modal: true }, 'Submit Job', 'Cancel');
+        return action === 'Submit Job';
+    }
+}
+exports.NewJobWizard = NewJobWizard;
+
 
 /***/ })
 /******/ 	]);

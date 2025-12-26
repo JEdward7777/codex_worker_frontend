@@ -98,23 +98,35 @@
 4. **Verse Identification**: Book = 3-letter .codex filename, Chapter/Verse = JSON structure
 5. **Implementation Order**: GitLab → Manifest → Audio Discovery → UI → State Management
 
-### Phase 4: UI Implementation - 🔄 NEXT
+### Phase 4: UI Implementation - ✅ COMPLETE
 
-#### Planned Tasks
-1. Create sidebar panel with job list
-2. Implement "New Job" button and dialog flow
-3. Create confirmation pane showing:
-   - Number of audio/text pairs
-   - Missing recordings
-   - Training vs inference vs both
-   - Model selection (new vs existing)
-   - Epoch count
-   - Inference verse inclusion/exclusion
-4. Add warnings for:
-   - Another job already running
-   - Insufficient audio for training
-5. Implement job state visualization (icons/colors)
-6. Display worker name and epoch progress
+#### Completed Items
+- ✅ Created UI type definitions (`src/types/ui.ts`)
+- ✅ Created JobTreeDataProvider (`src/ui/JobTreeDataProvider.ts`)
+- ✅ Created JobTreeItem for individual job display
+- ✅ Created NewJobWizard (`src/ui/NewJobWizard.ts`)
+- ✅ Implemented PreflightService (`src/services/PreflightService.ts`)
+- ✅ Integrated all services in extension.ts
+- ✅ Registered sidebar view in package.json
+- ✅ Added command handlers for refreshJobs, newJob, cancelJob
+- ✅ Successfully compiled with no TypeScript errors
+
+#### Key Implementation Details
+- **Sidebar View ID**: `codex-worker-jobs`
+- **Tree Data Provider**: JobTreeDataProvider with workspaceRoot and ManifestService
+- **Job Sorting**: running → pending → completed/failed/canceled
+- **State Icons**: ⏳ pending, ▶️ running, ✅ completed, ❌ failed, 🚫 canceled
+- **Wizard Steps**: Mode → Model Type → Base Checkpoint → Epochs → Verses → Voice Reference → Confirmation
+- **Preflight Checks**: Audio sufficiency, running jobs, base model, GitLab connectivity, verse selection
+- **Minimum Audio**: 50 pairs recommended for training
+
+#### Files Created/Modified
+- `src/types/ui.ts` - UI type definitions (66 lines)
+- `src/ui/JobTreeDataProvider.ts` - Tree data provider (243 lines)
+- `src/ui/NewJobWizard.ts` - Job creation wizard (433 lines)
+- `src/services/PreflightService.ts` - Preflight validation (273 lines)
+- `src/extension.ts` - Integrated all UI components (310 lines)
+- `package.json` - Added viewsContainers, views, commands, menus
 
 ### Testing Status
 - ✅ Extension compiles successfully
@@ -130,10 +142,28 @@
 - ✅ Verse parsing handles verse ranges (MAT 5:1-2)
 - ✅ Audio file validation works
 - ⏳ Actual project sharing/unsharing (ready to test when needed)
-- ⏳ UI implementation (Phase 4)
+- ⏳ UI testing in VS Code (Phase 4 complete, ready to test)
+- ⏳ Complete job creation workflow testing
+- ⏳ Job cancellation testing
+- ⏳ Job state refresh testing
 
 ### Notes
 - This is a multi-session project
 - User is available for questions throughout
 - Real GitLab instance + worker available for testing
 - Extension successfully tested with real project: `JoshuaLansford/demo_reflection_project-2oamkeq57ftexjttxtp9cn`
+- Phase 4 UI implementation complete - ready for end-to-end testing
+
+### Phase 5: Testing & Refinement - 🔄 NEXT
+
+#### Planned Tasks
+1. Test sidebar panel display in VS Code
+2. Test "New Job" wizard flow
+3. Test job creation with real audio data
+4. Test preflight validation (warnings and errors)
+5. Test job cancellation
+6. Test job state refresh
+7. Test GitLab project sharing on job creation
+8. Test manifest generation and updates
+9. Verify job state detection from filesystem
+10. End-to-end workflow testing

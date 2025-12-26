@@ -69,8 +69,8 @@ export class AudioDiscoveryService {
 
         // Sort verses by book, chapter, verse
         allVerses.sort((a, b) => {
-            if (a.book !== b.book) return a.book.localeCompare(b.book);
-            if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+            if (a.book !== b.book) {return a.book.localeCompare(b.book);}
+            if (a.chapter !== b.chapter) {return a.chapter - b.chapter;}
             return a.verse - b.verse;
         });
 

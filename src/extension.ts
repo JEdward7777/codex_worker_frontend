@@ -4,11 +4,16 @@ import * as vscode from 'vscode';
 import { GitLabService } from './services/GitLabService';
 import { ManifestService } from './services/ManifestService';
 import { AudioDiscoveryService } from './services/AudioDiscoveryService';
+import { PreflightService } from './services/PreflightService';
+import { JobTreeDataProvider, JobTreeItem } from './ui/JobTreeDataProvider';
+import { NewJobWizard } from './ui/NewJobWizard';
 
 // Global service instances
 let gitLabService: GitLabService;
 let manifestService: ManifestService;
 let audioDiscoveryService: AudioDiscoveryService;
+let preflightService: PreflightService;
+let jobTreeDataProvider: JobTreeDataProvider;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -28,6 +33,20 @@ export function activate(context: vscode.ExtensionContext) {
 	gitLabService = new GitLabService();
 	manifestService = new ManifestService();
 	audioDiscoveryService = new AudioDiscoveryService(workspaceRoot);
+	preflightService = new PreflightService(
+		audioDiscoveryService,
+		manifestService,
+		gitLabService
+	);
+
+	// Initialize tree data provider
+	jobTreeDataProvider = new JobTreeDataProvider(workspaceRoot, manifestService);
+	
+	// Register tree view
+	const treeView = vscode.window.createTreeView('codex-worker-jobs', {
+		treeDataProvider: jobTreeDataProvider,
+		showCollapseAll: false
+	});
 
 	// Register hello world command (for testing)
 	const helloWorldDisposable = vscode.commands.registerCommand('codex-worker.helloWorld', () => {
@@ -205,11 +224,117 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register refresh jobs command
+	const refreshJobsDisposable = vscode.commands.registerCommand('codex-worker.refreshJobs', async () => {
+		await jobTreeDataProvider.refresh();
+		vscode.window.showInformationMessage('Job list refreshed');
+	});
+
+	// Register new job command
+	const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
+		try {
+			const wizard = new NewJobWizard(
+				audioDiscoveryService,
+				manifestService
+			);
+
+			const jobParams = await wizard.run();
+			
+			if (!jobParams) {
+				// User cancelled
+				return;
+			}
+
+			// Run preflight checks
+			const preflightResult = await preflightService.performChecks(jobParams);
+			
+			// Show confirmation with preflight results
+			const confirmed = await wizard.showConfirmation(jobParams, preflightResult);
+			if (!confirmed) {
+				return;
+			}
+
+			// Create the job
+			const jobId = manifestService.generateJobId();
+			const job = {
+				job_id: jobId,
+				job_type: 'tts' as const,
+				mode: jobParams.mode,
+				model: {
+					type: jobParams.modelType as 'StableTTS',
+					base_checkpoint: jobParams.baseCheckpoint
+				},
+				epochs: jobParams.epochs,
+				inference: (jobParams.includeVerses || jobParams.excludeVerses) ? {
+					include_verses: jobParams.includeVerses,
+					exclude_verses: jobParams.excludeVerses
+				} : undefined,
+				voice_reference: jobParams.voiceReference,
+				canceled: false
+			};
+
+			// Add job to manifest
+			await manifestService.addJob(job);
+
+			// Share project with worker
+			await gitLabService.shareProjectWithWorker();
+
+			// Refresh the tree view
+			await jobTreeDataProvider.refresh();
+
+			vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
+			console.error('New job error:', error);
+		}
+	});
+
+	// Register cancel job command
+	const cancelJobDisposable = vscode.commands.registerCommand('codex-worker.cancelJob', async (jobItem: JobTreeItem) => {
+		try {
+			if (!jobItem || !jobItem.job) {
+				vscode.window.showErrorMessage('No job selected');
+				return;
+			}
+
+			const jobId = jobItem.job.job_id;
+
+			const confirm = await vscode.window.showWarningMessage(
+				`Cancel job ${jobId}?`,
+				{ modal: true },
+				'Yes', 'No'
+			);
+
+			if (confirm !== 'Yes') {
+				return;
+			}
+
+			// Cancel the job
+			await manifestService.cancelJob(jobId);
+
+			// Refresh the tree view
+			await jobTreeDataProvider.refresh();
+
+			vscode.window.showInformationMessage(`✓ Job ${jobId} cancelled`);
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Failed to cancel job: ${errorMessage}`);
+			console.error('Cancel job error:', error);
+		}
+	});
+
 	context.subscriptions.push(
 		helloWorldDisposable,
 		testGitLabDisposable,
 		testManifestDisposable,
-		testAudioDiscoveryDisposable
+		testAudioDiscoveryDisposable,
+		treeView,
+		refreshJobsDisposable,
+		newJobDisposable,
+		cancelJobDisposable
 	);
 }
 
