@@ -276,20 +276,20 @@ function activate(context) {
                 return;
             }
             const jobId = jobItem.job.job_id;
-            const confirm = await vscode.window.showWarningMessage(`Cancel job ${jobId}?`, { modal: true }, 'Yes', 'No');
+            const confirm = await vscode.window.showWarningMessage(`Remove job ${jobId} from the manifest?`, { modal: true }, 'Yes', 'No');
             if (confirm !== 'Yes') {
                 return;
             }
-            // Cancel the job
-            await manifestService.cancelJob(jobId);
+            // Remove the job from the manifest
+            await manifestService.removeJob(jobId);
             // Refresh the tree view
             await jobTreeDataProvider.refresh();
-            vscode.window.showInformationMessage(`✓ Job ${jobId} cancelled`);
+            vscode.window.showInformationMessage(`✓ Job ${jobId} removed from manifest`);
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`Failed to cancel job: ${errorMessage}`);
-            console.error('Cancel job error:', error);
+            vscode.window.showErrorMessage(`Failed to remove job: ${errorMessage}`);
+            console.error('Remove job error:', error);
         }
     });
     context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, treeView, refreshJobsDisposable, newJobDisposable, cancelJobDisposable);
@@ -742,6 +742,22 @@ class ManifestService {
      */
     async cancelJob(jobId) {
         await this.updateJob(jobId, { canceled: true });
+    }
+    /**
+     * Remove a job from the manifest
+     */
+    async removeJob(jobId) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            throw new Error('No manifest file exists');
+        }
+        const jobIndex = manifest.jobs.findIndex(j => j.job_id === jobId);
+        if (jobIndex === -1) {
+            throw new Error(`Job with ID ${jobId} not found`);
+        }
+        // Remove the job from the array
+        manifest.jobs.splice(jobIndex, 1);
+        await this.writeManifest(manifest);
     }
     /**
      * Get all jobs with their current state from filesystem

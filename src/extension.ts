@@ -302,7 +302,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const jobId = jobItem.job.job_id;
 
 			const confirm = await vscode.window.showWarningMessage(
-				`Cancel job ${jobId}?`,
+				`Remove job ${jobId} from the manifest?`,
 				{ modal: true },
 				'Yes', 'No'
 			);
@@ -311,18 +311,18 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			// Cancel the job
-			await manifestService.cancelJob(jobId);
+			// Remove the job from the manifest
+			await manifestService.removeJob(jobId);
 
 			// Refresh the tree view
 			await jobTreeDataProvider.refresh();
 
-			vscode.window.showInformationMessage(`✓ Job ${jobId} cancelled`);
+			vscode.window.showInformationMessage(`✓ Job ${jobId} removed from manifest`);
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			vscode.window.showErrorMessage(`Failed to cancel job: ${errorMessage}`);
-			console.error('Cancel job error:', error);
+			vscode.window.showErrorMessage(`Failed to remove job: ${errorMessage}`);
+			console.error('Remove job error:', error);
 		}
 	});
 

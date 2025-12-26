@@ -167,6 +167,27 @@ export class ManifestService {
     }
 
     /**
+     * Remove a job from the manifest
+     */
+    async removeJob(jobId: string): Promise<void> {
+        const manifest = await this.readManifest();
+        
+        if (!manifest) {
+            throw new Error('No manifest file exists');
+        }
+
+        const jobIndex = manifest.jobs.findIndex(j => j.job_id === jobId);
+        if (jobIndex === -1) {
+            throw new Error(`Job with ID ${jobId} not found`);
+        }
+
+        // Remove the job from the array
+        manifest.jobs.splice(jobIndex, 1);
+
+        await this.writeManifest(manifest);
+    }
+
+    /**
      * Get all jobs with their current state from filesystem
      */
     async getJobsWithState(): Promise<JobWithState[]> {
