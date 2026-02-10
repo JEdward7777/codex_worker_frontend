@@ -142,7 +142,7 @@ export class PreflightService {
     private async checkBaseModel(checkpoint: string, errors: string[]): Promise<void> {
         // For now, just do basic validation
         // In the future, could check if the checkpoint file/job actually exists
-        
+
         if (!checkpoint || checkpoint.trim().length === 0) {
             errors.push('Base checkpoint path cannot be empty.');
             return;
@@ -202,11 +202,11 @@ export class PreflightService {
             warnings.push('Include verse list is empty - no verses will be processed.');
         }
 
-        // Basic format validation for verse references
+        // Basic format validation for cell references
         const allVerses = [...(params.includeVerses || []), ...(params.excludeVerses || [])];
         for (const verse of allVerses) {
             if (!this.isValidVerseReference(verse)) {
-                warnings.push(`Verse reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE)`);
+                warnings.push(`Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
             }
         }
     }
@@ -237,13 +237,20 @@ export class PreflightService {
     }
 
     /**
-     * Basic validation for verse reference format
+     * Basic validation for cell reference format
+     * Accepts both Bible references and alphanumeric IDs
      */
     private isValidVerseReference(verse: string): boolean {
-        // Expected format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
+        // Bible reference format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
         // Examples: "JHN 1:1", "MAT 5:1-10", "1CH 2:3"
-        const pattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
-        return pattern.test(verse.trim());
+        const bibleRefPattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
+
+        // Alphanumeric ID format (UUID-like or other alphanumeric)
+        // Examples: "cf5a575d-84e2-6dee-0e3a-06b719bcae7a", "abc123"
+        const alphanumericPattern = /^[a-zA-Z0-9\-]+$/;
+
+        const trimmed = verse.trim();
+        return bibleRefPattern.test(trimmed) || alphanumericPattern.test(trimmed);
     }
 
     /**

@@ -1,6 +1,6 @@
 /**
  * Audio Discovery Service
- * 
+ *
  * Scans .codex files and extracts audio/text pairs for TTS training
  */
 
@@ -32,7 +32,7 @@ export class AudioDiscoveryService {
 
         // Find all .codex files
         const codexFiles = await this.findCodexFiles(basePath);
-        
+
         if (codexFiles.length === 0) {
             throw new Error(`No .codex files found in ${baseDir}`);
         }
@@ -45,33 +45,48 @@ export class AudioDiscoveryService {
 
         for (const codexFilePath of codexFiles) {
             const verses = await this.parseCodexFile(codexFilePath, options);
-            
-            for (const verse of verses) {
-                // Apply filters
-                if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
-                    continue;
-                }
 
-                if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
-                    continue;
+            for (const verse of verses) {
+                // Apply filters (only if verse has Bible reference data)
+                if (verse.book) {
+                    if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
+                        continue;
+                    }
+
+                    if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
+                        continue;
+                    }
+
+                    books.add(verse.book);
+
+                    // Update counts
+                    versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
+                    if (verse.hasAudio) {
+                        audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
+                    }
                 }
 
                 allVerses.push(verse);
-                books.add(verse.book);
-
-                // Update counts
-                versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
-                if (verse.hasAudio) {
-                    audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
-                }
             }
         }
 
-        // Sort verses by book, chapter, verse
+        // Sort verses by book, chapter, verse (verses without Bible refs go to end)
         allVerses.sort((a, b) => {
+            // Verses without book info go to the end
+            if (!a.book && !b.book) {return 0;}
+            if (!a.book) {return 1;}
+            if (!b.book) {return -1;}
+
             if (a.book !== b.book) {return a.book.localeCompare(b.book);}
-            if (a.chapter !== b.chapter) {return a.chapter - b.chapter;}
-            return a.verse - b.verse;
+
+            // Handle missing chapter/verse
+            const aChapter = a.chapter ?? 0;
+            const bChapter = b.chapter ?? 0;
+            if (aChapter !== bChapter) {return aChapter - bChapter;}
+
+            const aVerse = a.verse ?? 0;
+            const bVerse = b.verse ?? 0;
+            return aVerse - bVerse;
         });
 
         const versesWithAudio = allVerses.filter(v => v.hasAudio).length;
@@ -158,6 +173,40 @@ export class AudioDiscoveryService {
     }
 
     /**
+     * Parse a Bible reference string into its components
+     * Format: "BOOK CHAPTER:VERSE[-VERSE]" (e.g., "JHN 1:1", "MAT 5:1-10")
+     * Returns null if the reference cannot be parsed
+     */
+    private parseBibleReference(reference: string): {
+        book: string;
+        chapter: number;
+        verse: number;
+    } | null {
+        const parts = reference.split(' ');
+        if (parts.length !== 2) {
+            return null;
+        }
+
+        const book = parts[0];
+        const chapterVerse = parts[1];
+
+        const cvParts = chapterVerse.split(':');
+        if (cvParts.length !== 2) {
+            return null;
+        }
+
+        const chapter = parseInt(cvParts[0], 10);
+        const verseParts = cvParts[1].split('-');
+        const verse = parseInt(verseParts[0], 10);
+
+        if (isNaN(chapter) || isNaN(verse)) {
+            return null;
+        }
+
+        return { book, chapter, verse };
+    }
+
+    /**
      * Extract verse information from a .codex cell
      */
     private async extractVerseFromCell(
@@ -171,44 +220,30 @@ export class AudioDiscoveryService {
             return null;
         }
 
-        // Parse verse reference (e.g., "JHN 1:1", "1CH 2:3", "MAT 5:1-2")
-        // Format: BOOK CHAPTER:VERSE[-VERSE]
-        const verseRef = cell.metadata.id;
-        
-        // Split by space to get book and chapter:verse
-        const parts = verseRef.split(' ');
-        if (parts.length !== 2) {
-            console.warn(`Invalid verse reference format (expected 'BOOK CHAPTER:VERSE'): ${verseRef}`);
-            return null;
+        const cellId = cell.metadata.id;
+
+        // Determine where to find the Bible reference
+        // Old format: ID contains the Bible reference (has a colon, e.g., "JHN 1:1")
+        // New format: ID is alphanumeric (UUID), Bible reference is in data.globalReferences
+        let bibleRefString: string | undefined;
+
+        if (cellId.includes(':')) {
+            // Old format: ID is the Bible reference
+            bibleRefString = cellId;
+        } else {
+            // New format: Check data.globalReferences
+            if (cell.metadata.data?.globalReferences && cell.metadata.data.globalReferences.length > 0) {
+                bibleRefString = cell.metadata.data.globalReferences[0];
+            }
         }
 
-        const refBook = parts[0];
-        const chapterVerse = parts[1];
-
-        // Split by colon to get chapter and verse
-        const cvParts = chapterVerse.split(':');
-        if (cvParts.length !== 2) {
-            console.warn(`Invalid chapter:verse format: ${chapterVerse}`);
-            return null;
-        }
-
-        const chapterStr = cvParts[0];
-        const verseStr = cvParts[1];
-
-        // Parse chapter
-        const chapter = parseInt(chapterStr, 10);
-        if (isNaN(chapter)) {
-            console.warn(`Invalid chapter number: ${chapterStr}`);
-            return null;
-        }
-
-        // Parse verse (may be a range like "1-2", we'll take the first verse)
-        // For verse ranges, we store the first verse number
-        const verseParts = verseStr.split('-');
-        const verse = parseInt(verseParts[0], 10);
-        if (isNaN(verse)) {
-            console.warn(`Invalid verse number: ${verseStr}`);
-            return null;
+        // Parse the Bible reference if we found one
+        let parsedRef: { book: string; chapter: number; verse: number } | null = null;
+        if (bibleRefString) {
+            parsedRef = this.parseBibleReference(bibleRefString);
+            if (!parsedRef) {
+                console.warn(`Could not parse Bible reference: ${bibleRefString}`);
+            }
         }
 
         // Check for audio
@@ -218,14 +253,14 @@ export class AudioDiscoveryService {
 
         if (cell.metadata.attachments && cell.metadata.selectedAudioId) {
             const selectedAudio = cell.metadata.attachments[cell.metadata.selectedAudioId];
-            
+
             if (selectedAudio && !selectedAudio.isDeleted) {
                 audioId = cell.metadata.selectedAudioId;
-                
+
                 // The URL in the .codex file is relative to the project root
                 // e.g., ".project/attachments/files/JHN/audio-xxx.webm"
                 const relativeAudioPath = selectedAudio.url;
-                
+
                 // Convert to absolute path
                 const absoluteAudioPath = path.join(
                     path.dirname(codexFilePath),
@@ -253,10 +288,11 @@ export class AudioDiscoveryService {
         }
 
         return {
-            verseRef,
-            book: refBook,
-            chapter,
-            verse,
+            cellId,
+            verseRef: bibleRefString,
+            book: parsedRef?.book,
+            chapter: parsedRef?.chapter,
+            verse: parsedRef?.verse,
             text: cell.value,
             hasAudio,
             audioPath,
@@ -266,11 +302,17 @@ export class AudioDiscoveryService {
 
     /**
      * Check if a verse matches the specified verse range
+     * Only works for verses with Bible reference data
      */
     private matchesVerseRange(
         verse: VerseAudio,
         range: NonNullable<AudioDiscoveryOptions['verseRange']>
     ): boolean {
+        // Can't match range if verse doesn't have Bible reference data
+        if (!verse.book || verse.chapter === undefined || verse.verse === undefined) {
+            return false;
+        }
+
         if (verse.book !== range.book) {
             return false;
         }
@@ -284,17 +326,17 @@ export class AudioDiscoveryService {
         }
 
         // If we're in the start chapter, check start verse
-        if (range.startChapter !== undefined && 
-            verse.chapter === range.startChapter && 
-            range.startVerse !== undefined && 
+        if (range.startChapter !== undefined &&
+            verse.chapter === range.startChapter &&
+            range.startVerse !== undefined &&
             verse.verse < range.startVerse) {
             return false;
         }
 
         // If we're in the end chapter, check end verse
-        if (range.endChapter !== undefined && 
-            verse.chapter === range.endChapter && 
-            range.endVerse !== undefined && 
+        if (range.endChapter !== undefined &&
+            verse.chapter === range.endChapter &&
+            range.endVerse !== undefined &&
             verse.verse > range.endVerse) {
             return false;
         }

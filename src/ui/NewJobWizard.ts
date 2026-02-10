@@ -174,7 +174,7 @@ export class NewJobWizard {
 
         const selected = await vscode.window.showQuickPick(availableItems, {
             title: 'Base Model',
-            placeHolder: isRequired 
+            placeHolder: isRequired
                 ? 'Select an existing model for inference'
                 : 'Start from scratch or fine-tune an existing model?'
         });
@@ -231,48 +231,48 @@ export class NewJobWizard {
     }
 
     /**
-     * Step 5: Select verses for inference
+     * Step 5: Select cells for inference
      */
     private async selectVerses(): Promise<{ include?: string[]; exclude?: string[] } | null> {
         const items: vscode.QuickPickItem[] = [
             {
-                label: '$(check-all) All Verses',
-                description: 'Generate audio for all verses',
-                detail: 'Process every verse in the project'
+                label: '$(check-all) All Cells',
+                description: 'Generate audio for all cells',
+                detail: 'Process every cell in the project'
             },
             {
-                label: '$(list-selection) Specific Verses',
-                description: 'Choose which verses to include/exclude',
-                detail: 'Manually specify verse ranges'
+                label: '$(list-selection) Specific Cells',
+                description: 'Choose which cells to include/exclude',
+                detail: 'Manually specify cell references'
             }
         ];
 
         const selected = await vscode.window.showQuickPick(items, {
-            title: 'Verse Selection',
-            placeHolder: 'Which verses should be processed?'
+            title: 'Cell Selection',
+            placeHolder: 'Which cells should be processed?'
         });
 
         if (!selected) {
             return null;
         }
 
-        if (selected.label.includes('All Verses')) {
+        if (selected.label.includes('All Cells')) {
             return {}; // No filters
         }
 
         // Ask if they want to include or exclude
         const filterType = await vscode.window.showQuickPick([
             {
-                label: 'Include Specific Verses',
-                description: 'Only process these verses'
+                label: 'Include Specific Cells',
+                description: 'Only process these cells'
             },
             {
-                label: 'Exclude Specific Verses',
-                description: 'Process all except these verses'
+                label: 'Exclude Specific Cells',
+                description: 'Process all except these cells'
             }
         ], {
             title: 'Filter Type',
-            placeHolder: 'Include or exclude verses?'
+            placeHolder: 'Include or exclude cells?'
         });
 
         if (!filterType) {
@@ -282,12 +282,12 @@ export class NewJobWizard {
         const isInclude = filterType.label.includes('Include');
 
         const versesInput = await vscode.window.showInputBox({
-            title: isInclude ? 'Include Verses' : 'Exclude Verses',
-            prompt: 'Enter verse references (comma-separated)',
-            placeHolder: 'e.g., JHN 1:1, JHN 1:2-5, MAT 5:1',
+            title: isInclude ? 'Include Cells' : 'Exclude Cells',
+            prompt: 'Enter cell references (comma-separated)',
+            placeHolder: 'e.g., JHN 1:1, cf5a575d-84e2-6dee-0e3a-06b719bcae7a, MAT 5:1',
             validateInput: (value) => {
                 if (!value || value.trim().length === 0) {
-                    return 'Please enter at least one verse reference';
+                    return 'Please enter at least one cell reference';
                 }
                 // Basic validation - could be more sophisticated
                 return null;
@@ -304,7 +304,7 @@ export class NewJobWizard {
             .map(v => v.trim())
             .filter(v => v.length > 0);
 
-        return isInclude 
+        return isInclude
             ? { include: verses }
             : { exclude: verses };
     }
@@ -383,12 +383,12 @@ export class NewJobWizard {
 
         lines.push('');
 
-        // Verse selection
+        // Cell selection
         if (params.includeVerses && params.includeVerses.length > 0) {
-            lines.push(`**Include Verses:** ${params.includeVerses.length} verses`);
+            lines.push(`**Include Cells:** ${params.includeVerses.length} cells`);
         }
         if (params.excludeVerses && params.excludeVerses.length > 0) {
-            lines.push(`**Exclude Verses:** ${params.excludeVerses.length} verses`);
+            lines.push(`**Exclude Cells:** ${params.excludeVerses.length} cells`);
         }
 
         // Warnings

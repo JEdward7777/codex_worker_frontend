@@ -41,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize tree data provider
 	jobTreeDataProvider = new JobTreeDataProvider(workspaceRoot, manifestService);
-	
+
 	// Register tree view
 	const treeView = vscode.window.createTreeView('codex-worker-jobs', {
 		treeDataProvider: jobTreeDataProvider,
@@ -198,19 +198,19 @@ export function activate(context: vscode.ExtensionContext) {
 			// Show missing audio if any
 			if (summary.versesWithoutAudio > 0) {
 				const showMissing = await vscode.window.showInformationMessage(
-					`${summary.versesWithoutAudio} verses are missing audio. Show details?`,
+					`${summary.versesWithoutAudio} cells are missing audio. Show details?`,
 					'Yes', 'No'
 				);
 
 				if (showMissing === 'Yes') {
-					const missingVerses = summary.verses
+					const missingCells = summary.verses
 						.filter(v => !v.hasAudio)
 						.slice(0, 10)  // Show first 10
-						.map(v => v.verseRef)
+						.map(v => v.verseRef || v.cellId)  // Show Bible ref if available, otherwise cell ID
 						.join(', ');
-					
+
 					vscode.window.showInformationMessage(
-						`Missing audio (first 10): ${missingVerses}${summary.versesWithoutAudio > 10 ? '...' : ''}`
+						`Missing audio (first 10): ${missingCells}${summary.versesWithoutAudio > 10 ? '...' : ''}`
 					);
 				}
 			}
@@ -239,7 +239,7 @@ export function activate(context: vscode.ExtensionContext) {
 			);
 
 			const jobParams = await wizard.run();
-			
+
 			if (!jobParams) {
 				// User cancelled
 				return;
@@ -247,7 +247,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Run preflight checks
 			const preflightResult = await preflightService.performChecks(jobParams);
-			
+
 			// Show confirmation with preflight results
 			const confirmed = await wizard.showConfirmation(jobParams, preflightResult);
 			if (!confirmed) {

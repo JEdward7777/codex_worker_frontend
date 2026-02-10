@@ -1,6 +1,6 @@
 /**
  * Audio Discovery Types
- * 
+ *
  * Types for parsing .codex files and extracting audio/text pairs
  */
 
@@ -20,8 +20,11 @@ export interface AudioAttachment {
  */
 export interface CodexCellMetadata {
     type: string;
-    id: string;  // e.g., "JHN 1:1"
-    data: Record<string, any>;
+    id: string;  // Can be either Bible reference (e.g., "JHN 1:1") or alphanumeric ID (e.g., UUID)
+    data: {
+        globalReferences?: string[];  // Bible references (e.g., ["OBA 1:1"])
+        [key: string]: any;
+    };
     cellLabel: string;
     attachments?: Record<string, AudioAttachment>;
     selectedAudioId?: string;
@@ -50,14 +53,16 @@ export interface CodexFile {
  * Represents a verse with its audio information
  */
 export interface VerseAudio {
-    /** Verse reference (e.g., "JHN 1:1") */
-    verseRef: string;
-    /** Book code (e.g., "JHN") */
-    book: string;
-    /** Chapter number */
-    chapter: number;
-    /** Verse number */
-    verse: number;
+    /** Cell ID (can be Bible reference like "JHN 1:1" or alphanumeric ID like UUID) */
+    cellId: string;
+    /** Bible verse reference (e.g., "JHN 1:1") - optional for non-Bible projects */
+    verseRef?: string;
+    /** Book code (e.g., "JHN") - optional for non-Bible projects */
+    book?: string;
+    /** Chapter number - optional for non-Bible projects */
+    chapter?: number;
+    /** Verse number - optional for non-Bible projects */
+    verse?: number;
     /** Verse text content */
     text: string;
     /** Whether this verse has valid audio */
