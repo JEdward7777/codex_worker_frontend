@@ -4,7 +4,7 @@
 
 import * as vscode from 'vscode';
 import { JobCreationParams, PreflightCheckResult } from '../types/ui';
-import { Job, JobMode, TTSModelType } from '../types/manifest';
+import { Job, JobMode, TTSModelType, CheckpointInfo } from '../types/manifest';
 import { AudioDiscoveryService } from '../services/AudioDiscoveryService';
 import { ManifestService } from '../services/ManifestService';
 
@@ -35,15 +35,30 @@ export class NewJobWizard {
                 return null;
             }
 
-            // Step 3: Select base checkpoint (optional)
-            const baseCheckpoint = await this.selectBaseCheckpoint(mode);
+            // Step 3: Select base checkpoint (optional for training, required for inference)
+            let currentMode = mode;
+            const baseCheckpoint = await this.selectBaseCheckpoint(currentMode, modelType);
             if (baseCheckpoint === undefined) {
-                return null; // User canceled
+                // For inference-only with no checkpoints, offer to switch to training_and_inference
+                if (currentMode === 'inference') {
+                    const switchMode = await vscode.window.showInformationMessage(
+                        'No trained model checkpoints are available. Would you like to train a new model and then run inference?',
+                        'Train & Infer', 'Cancel'
+                    );
+                    if (switchMode === 'Train & Infer') {
+                        currentMode = 'training_and_inference';
+                        // No base checkpoint needed for training from scratch
+                    } else {
+                        return null; // User canceled
+                    }
+                } else {
+                    return null; // User canceled
+                }
             }
 
             // Step 4: Select epochs (if training)
             let epochs: number | undefined;
-            if (mode === 'training' || mode === 'training_and_inference') {
+            if (currentMode === 'training' || currentMode === 'training_and_inference') {
                 epochs = await this.selectEpochs();
                 if (epochs === undefined) {
                     return null;
@@ -53,7 +68,7 @@ export class NewJobWizard {
             // Step 5: Select verses (if inference)
             let includeVerses: string[] | undefined;
             let excludeVerses: string[] | undefined;
-            if (mode === 'inference' || mode === 'training_and_inference') {
+            if (currentMode === 'inference' || currentMode === 'training_and_inference') {
                 const verseSelection = await this.selectVerses();
                 if (!verseSelection) {
                     return null;
@@ -69,7 +84,7 @@ export class NewJobWizard {
             }
 
             return {
-                mode,
+                mode: currentMode,
                 modelType,
                 baseCheckpoint: baseCheckpoint || undefined,
                 epochs,
@@ -149,58 +164,104 @@ export class NewJobWizard {
     }
 
     /**
-     * Step 3: Select base checkpoint (optional)
+     * Step 3: Select base checkpoint (optional for training, required for inference)
+     * Returns: checkpoint path string, null (no checkpoint / train from scratch), or undefined (canceled)
      */
-    private async selectBaseCheckpoint(mode: JobMode): Promise<string | null | undefined> {
+    private async selectBaseCheckpoint(mode: JobMode, modelType: string): Promise<string | null | undefined> {
         // For inference-only, base checkpoint is required
-        // For training, it's optional (fine-tuning vs new model)
         const isRequired = mode === 'inference';
 
-        const items: vscode.QuickPickItem[] = [
-            {
-                label: '$(new-file) Train New Model',
-                description: 'Start from scratch',
-                detail: 'Create a brand new model without a base checkpoint'
-            },
-            {
-                label: '$(file) Use Existing Model',
-                description: 'Fine-tune or use existing',
-                detail: 'Select a previously trained model as the base'
+        if (!isRequired) {
+            // For training modes, ask if they want to start fresh or use existing
+            const items: vscode.QuickPickItem[] = [
+                {
+                    label: '$(new-file) Train New Model',
+                    description: 'Start from scratch',
+                    detail: 'Create a brand new model without a base checkpoint'
+                },
+                {
+                    label: '$(file) Continue From Existing Model',
+                    description: 'Fine-tune an existing model',
+                    detail: 'Select a previously trained model as the base'
+                }
+            ];
+
+            const selected = await vscode.window.showQuickPick(items, {
+                title: 'Base Model',
+                placeHolder: 'Start from scratch or fine-tune an existing model?'
+            });
+
+            if (!selected) {
+                return undefined; // Canceled
             }
-        ];
 
-        // For inference, remove the "new model" option
-        const availableItems = isRequired ? items.slice(1) : items;
+            if (selected.label.includes('New Model')) {
+                return null; // No base checkpoint
+            }
+        }
 
-        const selected = await vscode.window.showQuickPick(availableItems, {
-            title: 'Base Model',
-            placeHolder: isRequired
-                ? 'Select an existing model for inference'
-                : 'Start from scratch or fine-tune an existing model?'
+        // Pick a checkpoint from completed jobs
+        return this.pickCheckpoint(modelType);
+    }
+
+    /**
+     * Reusable checkpoint picker: shows a QuickPick of available checkpoints
+     * from completed jobs matching the given model type.
+     * Returns: checkpoint path string, or undefined if canceled or none available.
+     */
+    async pickCheckpoint(modelType: string): Promise<string | undefined> {
+        const checkpoints = await this.manifestService.getAvailableCheckpoints(modelType);
+
+        if (checkpoints.length === 0) {
+            vscode.window.showWarningMessage(
+                `No trained model checkpoints found for model type "${modelType}". Complete a training job first.`
+            );
+            return undefined;
+        }
+
+        const items: vscode.QuickPickItem[] = checkpoints.map(cp => {
+            const parts: string[] = [];
+
+            // Epochs info
+            if (cp.epochs) {
+                parts.push(`${cp.epochs} epochs`);
+            }
+
+            // Date info
+            if (cp.timestamp) {
+                try {
+                    const date = new Date(cp.timestamp);
+                    parts.push(date.toLocaleDateString());
+                } catch {
+                    // Skip date if unparseable
+                }
+            } else if (cp.fileTimestamp) {
+                parts.push(cp.fileTimestamp.toLocaleDateString());
+            }
+
+            // Filtered indicator
+            if (cp.filtered) {
+                parts.push('filtered');
+            }
+
+            return {
+                label: `$(file) ${cp.jobId}`,
+                description: parts.join(' • '),
+                detail: cp.checkpointPath
+            };
+        });
+
+        const selected = await vscode.window.showQuickPick(items, {
+            title: 'Select Model Checkpoint',
+            placeHolder: 'Choose a trained model checkpoint'
         });
 
         if (!selected) {
-            return undefined; // Canceled
+            return undefined;
         }
 
-        if (selected.label.includes('New Model')) {
-            return null; // No base checkpoint
-        }
-
-        // Let user enter the checkpoint path/ID
-        const checkpoint = await vscode.window.showInputBox({
-            title: 'Base Checkpoint',
-            prompt: 'Enter the path or ID of the base model checkpoint',
-            placeHolder: 'e.g., models/my-model-epoch-100.pt or job_abc123',
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Checkpoint path cannot be empty';
-                }
-                return null;
-            }
-        });
-
-        return checkpoint || undefined;
+        // The detail field contains the checkpoint path
+        return selected.detail;
     }
 
     /**

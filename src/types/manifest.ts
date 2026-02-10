@@ -27,11 +27,19 @@ export interface ModelConfig {
 }
 
 /**
+ * Training configuration
+ */
+export interface TrainingConfig {
+    include_verses?: string[]; // List of verses to include in training
+    exclude_verses?: string[]; // List of verses to exclude from training
+}
+
+/**
  * Inference configuration
  */
 export interface InferenceConfig {
-    include_verses?: string[]; // List of verses to include
-    exclude_verses?: string[]; // List of verses to exclude
+    include_verses?: string[]; // List of verses to include in inference
+    exclude_verses?: string[]; // List of verses to exclude from inference
 }
 
 /**
@@ -43,6 +51,7 @@ export interface Job {
     mode: JobMode;
     model: ModelConfig;
     epochs?: number; // Optional, for training
+    training?: TrainingConfig; // Optional, for training mode
     inference?: InferenceConfig; // Optional, for inference mode
     voice_reference?: string; // Optional audio file reference
     timeout?: string; // ISO 8601 timestamp, optional
@@ -58,6 +67,13 @@ export interface Manifest {
 }
 
 /**
+ * Result data from a completed job
+ */
+export interface JobResult {
+    checkpoint_path?: string; // Path to the trained model checkpoint, relative to workspace root
+}
+
+/**
  * Worker response file structure (for reference/parsing)
  */
 export interface WorkerResponse {
@@ -66,6 +82,7 @@ export interface WorkerResponse {
     epochs_completed?: number;
     error_message?: string;
     timestamp?: string; // ISO 8601 timestamp
+    result?: JobResult; // Result data including checkpoint path
 }
 
 /**
@@ -76,4 +93,17 @@ export interface JobWithState extends Job {
     worker_id?: string;
     epochs_completed?: number;
     error_message?: string;
+}
+
+/**
+ * Information about an available checkpoint from a completed job
+ */
+export interface CheckpointInfo {
+    jobId: string;
+    checkpointPath: string; // Relative to workspace root
+    modelType: string;
+    epochs?: number; // Requested epoch count from manifest
+    timestamp?: string; // Completion timestamp from response.yaml
+    fileTimestamp?: Date; // File modification time of response.yaml (fallback)
+    filtered: boolean; // Whether the job had include/exclude verses set
 }

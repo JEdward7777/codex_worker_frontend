@@ -197,14 +197,14 @@ function activate(context) {
             }
             // Show missing audio if any
             if (summary.versesWithoutAudio > 0) {
-                const showMissing = await vscode.window.showInformationMessage(`${summary.versesWithoutAudio} verses are missing audio. Show details?`, 'Yes', 'No');
+                const showMissing = await vscode.window.showInformationMessage(`${summary.versesWithoutAudio} cells are missing audio. Show details?`, 'Yes', 'No');
                 if (showMissing === 'Yes') {
-                    const missingVerses = summary.verses
+                    const missingCells = summary.verses
                         .filter(v => !v.hasAudio)
                         .slice(0, 10) // Show first 10
-                        .map(v => v.verseRef)
+                        .map(v => v.verseRef || v.cellId) // Show Bible ref if available, otherwise cell ID
                         .join(', ');
-                    vscode.window.showInformationMessage(`Missing audio (first 10): ${missingVerses}${summary.versesWithoutAudio > 10 ? '...' : ''}`);
+                    vscode.window.showInformationMessage(`Missing audio (first 10): ${missingCells}${summary.versesWithoutAudio > 10 ? '...' : ''}`);
                 }
             }
             vscode.window.showInformationMessage('✓ Audio discovery test completed successfully!');
@@ -238,6 +238,14 @@ function activate(context) {
             }
             // Create the job
             const jobId = manifestService.generateJobId();
+            const hasVerseFilters = !!(jobParams.includeVerses || jobParams.excludeVerses);
+            const verseFilters = hasVerseFilters ? {
+                include_verses: jobParams.includeVerses,
+                exclude_verses: jobParams.excludeVerses
+            } : undefined;
+            // Determine which configs to populate based on mode
+            const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
+            const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
             const job = {
                 job_id: jobId,
                 job_type: 'tts',
@@ -247,10 +255,8 @@ function activate(context) {
                     base_checkpoint: jobParams.baseCheckpoint
                 },
                 epochs: jobParams.epochs,
-                inference: (jobParams.includeVerses || jobParams.excludeVerses) ? {
-                    include_verses: jobParams.includeVerses,
-                    exclude_verses: jobParams.excludeVerses
-                } : undefined,
+                training: (needsTraining && verseFilters) ? verseFilters : undefined,
+                inference: (needsInference && verseFilters) ? verseFilters : undefined,
                 voice_reference: jobParams.voiceReference,
                 canceled: false
             };
@@ -882,6 +888,102 @@ class ManifestService {
             return null;
         }
         return manifest.jobs.find(j => j.job_id === jobId) || null;
+    }
+    /**
+     * Discover available checkpoints from completed jobs that match a given model type.
+     * Reads result.checkpoint_path from each job's response.yaml.
+     */
+    async getAvailableCheckpoints(modelType) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            return [];
+        }
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            return [];
+        }
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+            return [];
+        }
+        const checkpoints = [];
+        for (const job of manifest.jobs) {
+            // Filter by model type
+            if (job.model.type !== modelType) {
+                continue;
+            }
+            const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
+            const responsePath = path.join(jobFolder, 'response.yaml');
+            // Check if response file exists
+            if (!fs.existsSync(responsePath)) {
+                continue;
+            }
+            try {
+                const responseContent = fs.readFileSync(responsePath, 'utf8');
+                const response = yaml.load(responseContent);
+                // Only include completed jobs
+                if (response.state !== 'completed') {
+                    continue;
+                }
+                // Check for checkpoint path in result
+                const checkpointPath = response.result?.checkpoint_path;
+                if (!checkpointPath) {
+                    continue;
+                }
+                // Verify the checkpoint file actually exists
+                const absoluteCheckpointPath = path.resolve(workspaceRoot, checkpointPath);
+                if (!fs.existsSync(absoluteCheckpointPath)) {
+                    continue;
+                }
+                // Determine timestamp: prefer response.yaml timestamp, fall back to file mtime
+                let timestamp;
+                let fileTimestamp;
+                if (response.timestamp) {
+                    // Validate the timestamp is parseable
+                    const parsed = new Date(response.timestamp);
+                    if (!isNaN(parsed.getTime())) {
+                        timestamp = response.timestamp;
+                    }
+                }
+                // Always get file timestamp as fallback
+                try {
+                    const stat = fs.statSync(responsePath);
+                    fileTimestamp = stat.mtime;
+                }
+                catch {
+                    // Ignore stat errors
+                }
+                // If no valid timestamp from response, use file timestamp
+                if (!timestamp && fileTimestamp) {
+                    timestamp = fileTimestamp.toISOString();
+                }
+                // Determine if the job had verse filtering (training or inference)
+                const filtered = !!(job.training?.include_verses?.length ||
+                    job.training?.exclude_verses?.length ||
+                    job.inference?.include_verses?.length ||
+                    job.inference?.exclude_verses?.length);
+                checkpoints.push({
+                    jobId: job.job_id,
+                    checkpointPath,
+                    modelType: job.model.type,
+                    epochs: job.epochs,
+                    timestamp,
+                    fileTimestamp,
+                    filtered
+                });
+            }
+            catch {
+                // Skip jobs with unreadable response files
+                continue;
+            }
+        }
+        // Sort by timestamp descending (newest first)
+        checkpoints.sort((a, b) => {
+            const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return dateB - dateA;
+        });
+        return checkpoints;
     }
 }
 exports.ManifestService = ManifestService;
@@ -5022,31 +5124,48 @@ class AudioDiscoveryService {
         for (const codexFilePath of codexFiles) {
             const verses = await this.parseCodexFile(codexFilePath, options);
             for (const verse of verses) {
-                // Apply filters
-                if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
-                    continue;
-                }
-                if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
-                    continue;
+                // Apply filters (only if verse has Bible reference data)
+                if (verse.book) {
+                    if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
+                        continue;
+                    }
+                    if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
+                        continue;
+                    }
+                    books.add(verse.book);
+                    // Update counts
+                    versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
+                    if (verse.hasAudio) {
+                        audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
+                    }
                 }
                 allVerses.push(verse);
-                books.add(verse.book);
-                // Update counts
-                versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
-                if (verse.hasAudio) {
-                    audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
-                }
             }
         }
-        // Sort verses by book, chapter, verse
+        // Sort verses by book, chapter, verse (verses without Bible refs go to end)
         allVerses.sort((a, b) => {
+            // Verses without book info go to the end
+            if (!a.book && !b.book) {
+                return 0;
+            }
+            if (!a.book) {
+                return 1;
+            }
+            if (!b.book) {
+                return -1;
+            }
             if (a.book !== b.book) {
                 return a.book.localeCompare(b.book);
             }
-            if (a.chapter !== b.chapter) {
-                return a.chapter - b.chapter;
+            // Handle missing chapter/verse
+            const aChapter = a.chapter ?? 0;
+            const bChapter = b.chapter ?? 0;
+            if (aChapter !== bChapter) {
+                return aChapter - bChapter;
             }
-            return a.verse - b.verse;
+            const aVerse = a.verse ?? 0;
+            const bVerse = b.verse ?? 0;
+            return aVerse - bVerse;
         });
         const versesWithAudio = allVerses.filter(v => v.hasAudio).length;
         return {
@@ -5123,6 +5242,30 @@ class AudioDiscoveryService {
         return verses;
     }
     /**
+     * Parse a Bible reference string into its components
+     * Format: "BOOK CHAPTER:VERSE[-VERSE]" (e.g., "JHN 1:1", "MAT 5:1-10")
+     * Returns null if the reference cannot be parsed
+     */
+    parseBibleReference(reference) {
+        const parts = reference.split(' ');
+        if (parts.length !== 2) {
+            return null;
+        }
+        const book = parts[0];
+        const chapterVerse = parts[1];
+        const cvParts = chapterVerse.split(':');
+        if (cvParts.length !== 2) {
+            return null;
+        }
+        const chapter = parseInt(cvParts[0], 10);
+        const verseParts = cvParts[1].split('-');
+        const verse = parseInt(verseParts[0], 10);
+        if (isNaN(chapter) || isNaN(verse)) {
+            return null;
+        }
+        return { book, chapter, verse };
+    }
+    /**
      * Extract verse information from a .codex cell
      */
     async extractVerseFromCell(cell, book, codexFilePath, options) {
@@ -5130,38 +5273,28 @@ class AudioDiscoveryService {
         if (cell.metadata.type !== 'text') {
             return null;
         }
-        // Parse verse reference (e.g., "JHN 1:1", "1CH 2:3", "MAT 5:1-2")
-        // Format: BOOK CHAPTER:VERSE[-VERSE]
-        const verseRef = cell.metadata.id;
-        // Split by space to get book and chapter:verse
-        const parts = verseRef.split(' ');
-        if (parts.length !== 2) {
-            console.warn(`Invalid verse reference format (expected 'BOOK CHAPTER:VERSE'): ${verseRef}`);
-            return null;
+        const cellId = cell.metadata.id;
+        // Determine where to find the Bible reference
+        // Old format: ID contains the Bible reference (has a colon, e.g., "JHN 1:1")
+        // New format: ID is alphanumeric (UUID), Bible reference is in data.globalReferences
+        let bibleRefString;
+        if (cellId.includes(':')) {
+            // Old format: ID is the Bible reference
+            bibleRefString = cellId;
         }
-        const refBook = parts[0];
-        const chapterVerse = parts[1];
-        // Split by colon to get chapter and verse
-        const cvParts = chapterVerse.split(':');
-        if (cvParts.length !== 2) {
-            console.warn(`Invalid chapter:verse format: ${chapterVerse}`);
-            return null;
+        else {
+            // New format: Check data.globalReferences
+            if (cell.metadata.data?.globalReferences && cell.metadata.data.globalReferences.length > 0) {
+                bibleRefString = cell.metadata.data.globalReferences[0];
+            }
         }
-        const chapterStr = cvParts[0];
-        const verseStr = cvParts[1];
-        // Parse chapter
-        const chapter = parseInt(chapterStr, 10);
-        if (isNaN(chapter)) {
-            console.warn(`Invalid chapter number: ${chapterStr}`);
-            return null;
-        }
-        // Parse verse (may be a range like "1-2", we'll take the first verse)
-        // For verse ranges, we store the first verse number
-        const verseParts = verseStr.split('-');
-        const verse = parseInt(verseParts[0], 10);
-        if (isNaN(verse)) {
-            console.warn(`Invalid verse number: ${verseStr}`);
-            return null;
+        // Parse the Bible reference if we found one
+        let parsedRef = null;
+        if (bibleRefString) {
+            parsedRef = this.parseBibleReference(bibleRefString);
+            if (!parsedRef) {
+                console.warn(`Could not parse Bible reference: ${bibleRefString}`);
+            }
         }
         // Check for audio
         let hasAudio = false;
@@ -5196,10 +5329,11 @@ class AudioDiscoveryService {
             }
         }
         return {
-            verseRef,
-            book: refBook,
-            chapter,
-            verse,
+            cellId,
+            verseRef: bibleRefString,
+            book: parsedRef?.book,
+            chapter: parsedRef?.chapter,
+            verse: parsedRef?.verse,
             text: cell.value,
             hasAudio,
             audioPath,
@@ -5208,8 +5342,13 @@ class AudioDiscoveryService {
     }
     /**
      * Check if a verse matches the specified verse range
+     * Only works for verses with Bible reference data
      */
     matchesVerseRange(verse, range) {
+        // Can't match range if verse doesn't have Bible reference data
+        if (!verse.book || verse.chapter === undefined || verse.verse === undefined) {
+            return false;
+        }
         if (verse.book !== range.book) {
             return false;
         }
@@ -5451,11 +5590,11 @@ class PreflightService {
         if (params.includeVerses && params.includeVerses.length === 0) {
             warnings.push('Include verse list is empty - no verses will be processed.');
         }
-        // Basic format validation for verse references
+        // Basic format validation for cell references
         const allVerses = [...(params.includeVerses || []), ...(params.excludeVerses || [])];
         for (const verse of allVerses) {
             if (!this.isValidVerseReference(verse)) {
-                warnings.push(`Verse reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE)`);
+                warnings.push(`Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
             }
         }
     }
@@ -5482,13 +5621,18 @@ class PreflightService {
         }
     }
     /**
-     * Basic validation for verse reference format
+     * Basic validation for cell reference format
+     * Accepts both Bible references and alphanumeric IDs
      */
     isValidVerseReference(verse) {
-        // Expected format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
+        // Bible reference format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
         // Examples: "JHN 1:1", "MAT 5:1-10", "1CH 2:3"
-        const pattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
-        return pattern.test(verse.trim());
+        const bibleRefPattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
+        // Alphanumeric ID format (UUID-like or other alphanumeric)
+        // Examples: "cf5a575d-84e2-6dee-0e3a-06b719bcae7a", "abc123"
+        const alphanumericPattern = /^[a-zA-Z0-9\-]+$/;
+        const trimmed = verse.trim();
+        return bibleRefPattern.test(trimmed) || alphanumericPattern.test(trimmed);
     }
     /**
      * Get a summary of audio coverage by book
@@ -5832,14 +5976,28 @@ class NewJobWizard {
             if (!modelType) {
                 return null;
             }
-            // Step 3: Select base checkpoint (optional)
-            const baseCheckpoint = await this.selectBaseCheckpoint(mode);
+            // Step 3: Select base checkpoint (optional for training, required for inference)
+            let currentMode = mode;
+            const baseCheckpoint = await this.selectBaseCheckpoint(currentMode, modelType);
             if (baseCheckpoint === undefined) {
-                return null; // User canceled
+                // For inference-only with no checkpoints, offer to switch to training_and_inference
+                if (currentMode === 'inference') {
+                    const switchMode = await vscode.window.showInformationMessage('No trained model checkpoints are available. Would you like to train a new model and then run inference?', 'Train & Infer', 'Cancel');
+                    if (switchMode === 'Train & Infer') {
+                        currentMode = 'training_and_inference';
+                        // No base checkpoint needed for training from scratch
+                    }
+                    else {
+                        return null; // User canceled
+                    }
+                }
+                else {
+                    return null; // User canceled
+                }
             }
             // Step 4: Select epochs (if training)
             let epochs;
-            if (mode === 'training' || mode === 'training_and_inference') {
+            if (currentMode === 'training' || currentMode === 'training_and_inference') {
                 epochs = await this.selectEpochs();
                 if (epochs === undefined) {
                     return null;
@@ -5848,7 +6006,7 @@ class NewJobWizard {
             // Step 5: Select verses (if inference)
             let includeVerses;
             let excludeVerses;
-            if (mode === 'inference' || mode === 'training_and_inference') {
+            if (currentMode === 'inference' || currentMode === 'training_and_inference') {
                 const verseSelection = await this.selectVerses();
                 if (!verseSelection) {
                     return null;
@@ -5862,7 +6020,7 @@ class NewJobWizard {
                 return null;
             }
             return {
-                mode,
+                mode: currentMode,
                 modelType,
                 baseCheckpoint: baseCheckpoint || undefined,
                 epochs,
@@ -5933,51 +6091,89 @@ class NewJobWizard {
         return selected.label;
     }
     /**
-     * Step 3: Select base checkpoint (optional)
+     * Step 3: Select base checkpoint (optional for training, required for inference)
+     * Returns: checkpoint path string, null (no checkpoint / train from scratch), or undefined (canceled)
      */
-    async selectBaseCheckpoint(mode) {
+    async selectBaseCheckpoint(mode, modelType) {
         // For inference-only, base checkpoint is required
-        // For training, it's optional (fine-tuning vs new model)
         const isRequired = mode === 'inference';
-        const items = [
-            {
-                label: '$(new-file) Train New Model',
-                description: 'Start from scratch',
-                detail: 'Create a brand new model without a base checkpoint'
-            },
-            {
-                label: '$(file) Use Existing Model',
-                description: 'Fine-tune or use existing',
-                detail: 'Select a previously trained model as the base'
+        if (!isRequired) {
+            // For training modes, ask if they want to start fresh or use existing
+            const items = [
+                {
+                    label: '$(new-file) Train New Model',
+                    description: 'Start from scratch',
+                    detail: 'Create a brand new model without a base checkpoint'
+                },
+                {
+                    label: '$(file) Continue From Existing Model',
+                    description: 'Fine-tune an existing model',
+                    detail: 'Select a previously trained model as the base'
+                }
+            ];
+            const selected = await vscode.window.showQuickPick(items, {
+                title: 'Base Model',
+                placeHolder: 'Start from scratch or fine-tune an existing model?'
+            });
+            if (!selected) {
+                return undefined; // Canceled
             }
-        ];
-        // For inference, remove the "new model" option
-        const availableItems = isRequired ? items.slice(1) : items;
-        const selected = await vscode.window.showQuickPick(availableItems, {
-            title: 'Base Model',
-            placeHolder: isRequired
-                ? 'Select an existing model for inference'
-                : 'Start from scratch or fine-tune an existing model?'
+            if (selected.label.includes('New Model')) {
+                return null; // No base checkpoint
+            }
+        }
+        // Pick a checkpoint from completed jobs
+        return this.pickCheckpoint(modelType);
+    }
+    /**
+     * Reusable checkpoint picker: shows a QuickPick of available checkpoints
+     * from completed jobs matching the given model type.
+     * Returns: checkpoint path string, or undefined if canceled or none available.
+     */
+    async pickCheckpoint(modelType) {
+        const checkpoints = await this.manifestService.getAvailableCheckpoints(modelType);
+        if (checkpoints.length === 0) {
+            vscode.window.showWarningMessage(`No trained model checkpoints found for model type "${modelType}". Complete a training job first.`);
+            return undefined;
+        }
+        const items = checkpoints.map(cp => {
+            const parts = [];
+            // Epochs info
+            if (cp.epochs) {
+                parts.push(`${cp.epochs} epochs`);
+            }
+            // Date info
+            if (cp.timestamp) {
+                try {
+                    const date = new Date(cp.timestamp);
+                    parts.push(date.toLocaleDateString());
+                }
+                catch {
+                    // Skip date if unparseable
+                }
+            }
+            else if (cp.fileTimestamp) {
+                parts.push(cp.fileTimestamp.toLocaleDateString());
+            }
+            // Filtered indicator
+            if (cp.filtered) {
+                parts.push('filtered');
+            }
+            return {
+                label: `$(file) ${cp.jobId}`,
+                description: parts.join(' • '),
+                detail: cp.checkpointPath
+            };
+        });
+        const selected = await vscode.window.showQuickPick(items, {
+            title: 'Select Model Checkpoint',
+            placeHolder: 'Choose a trained model checkpoint'
         });
         if (!selected) {
-            return undefined; // Canceled
+            return undefined;
         }
-        if (selected.label.includes('New Model')) {
-            return null; // No base checkpoint
-        }
-        // Let user enter the checkpoint path/ID
-        const checkpoint = await vscode.window.showInputBox({
-            title: 'Base Checkpoint',
-            prompt: 'Enter the path or ID of the base model checkpoint',
-            placeHolder: 'e.g., models/my-model-epoch-100.pt or job_abc123',
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Checkpoint path cannot be empty';
-                }
-                return null;
-            }
-        });
-        return checkpoint || undefined;
+        // The detail field contains the checkpoint path
+        return selected.detail;
     }
     /**
      * Step 4: Select number of epochs
@@ -6004,56 +6200,56 @@ class NewJobWizard {
         return parseInt(epochStr, 10);
     }
     /**
-     * Step 5: Select verses for inference
+     * Step 5: Select cells for inference
      */
     async selectVerses() {
         const items = [
             {
-                label: '$(check-all) All Verses',
-                description: 'Generate audio for all verses',
-                detail: 'Process every verse in the project'
+                label: '$(check-all) All Cells',
+                description: 'Generate audio for all cells',
+                detail: 'Process every cell in the project'
             },
             {
-                label: '$(list-selection) Specific Verses',
-                description: 'Choose which verses to include/exclude',
-                detail: 'Manually specify verse ranges'
+                label: '$(list-selection) Specific Cells',
+                description: 'Choose which cells to include/exclude',
+                detail: 'Manually specify cell references'
             }
         ];
         const selected = await vscode.window.showQuickPick(items, {
-            title: 'Verse Selection',
-            placeHolder: 'Which verses should be processed?'
+            title: 'Cell Selection',
+            placeHolder: 'Which cells should be processed?'
         });
         if (!selected) {
             return null;
         }
-        if (selected.label.includes('All Verses')) {
+        if (selected.label.includes('All Cells')) {
             return {}; // No filters
         }
         // Ask if they want to include or exclude
         const filterType = await vscode.window.showQuickPick([
             {
-                label: 'Include Specific Verses',
-                description: 'Only process these verses'
+                label: 'Include Specific Cells',
+                description: 'Only process these cells'
             },
             {
-                label: 'Exclude Specific Verses',
-                description: 'Process all except these verses'
+                label: 'Exclude Specific Cells',
+                description: 'Process all except these cells'
             }
         ], {
             title: 'Filter Type',
-            placeHolder: 'Include or exclude verses?'
+            placeHolder: 'Include or exclude cells?'
         });
         if (!filterType) {
             return null;
         }
         const isInclude = filterType.label.includes('Include');
         const versesInput = await vscode.window.showInputBox({
-            title: isInclude ? 'Include Verses' : 'Exclude Verses',
-            prompt: 'Enter verse references (comma-separated)',
-            placeHolder: 'e.g., JHN 1:1, JHN 1:2-5, MAT 5:1',
+            title: isInclude ? 'Include Cells' : 'Exclude Cells',
+            prompt: 'Enter cell references (comma-separated)',
+            placeHolder: 'e.g., JHN 1:1, cf5a575d-84e2-6dee-0e3a-06b719bcae7a, MAT 5:1',
             validateInput: (value) => {
                 if (!value || value.trim().length === 0) {
-                    return 'Please enter at least one verse reference';
+                    return 'Please enter at least one cell reference';
                 }
                 // Basic validation - could be more sophisticated
                 return null;
@@ -6132,12 +6328,12 @@ class NewJobWizard {
         lines.push(`- Missing Recordings: ${preflightResult.audioStats.missingRecordings}`);
         lines.push(`- Coverage: ${preflightResult.audioStats.coveragePercentage.toFixed(1)}%`);
         lines.push('');
-        // Verse selection
+        // Cell selection
         if (params.includeVerses && params.includeVerses.length > 0) {
-            lines.push(`**Include Verses:** ${params.includeVerses.length} verses`);
+            lines.push(`**Include Cells:** ${params.includeVerses.length} cells`);
         }
         if (params.excludeVerses && params.excludeVerses.length > 0) {
-            lines.push(`**Exclude Verses:** ${params.excludeVerses.length} verses`);
+            lines.push(`**Exclude Cells:** ${params.excludeVerses.length} cells`);
         }
         // Warnings
         if (preflightResult.warnings.length > 0) {

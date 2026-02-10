@@ -119,6 +119,9 @@ jobs:
       type: <tts model type>
       base_checkpoint: <optional path or ID>
     epochs: <int, optional>
+    training:
+      include_verses: <optional list>
+      exclude_verses: <optional list>
     inference:
       include_verses: <optional list>
       exclude_verses: <optional list>
@@ -171,9 +174,17 @@ state: running | completed | failed | canceled
 epochs_completed: <optional int>
 error_message: <optional string>
 timestamp: <optional>
+result:
+  checkpoint_path: <optional, path to trained model checkpoint relative to workspace root>
 ```
 
 Worker uses `worker_id` to ensure it still owns the job.
+
+### Result Fields
+
+When a training job completes successfully, the worker populates the `result` object:
+
+* `checkpoint_path`: Path to the trained model file (`.pt`), relative to the workspace root (e.g., `gpu_jobs/job_abc123/model_epoch100.pt`). The plugin uses this field to discover available checkpoints for fine-tuning or inference.
 
 ---
 

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Manifest, Job, JobWithState, JobState, WorkerResponse } from '../types/manifest';
+import { Manifest, Job, JobWithState, JobState, WorkerResponse, CheckpointInfo } from '../types/manifest';
 
 /**
  * Service for managing the GPU jobs manifest file
@@ -65,10 +65,10 @@ export class ManifestService {
         try {
             const content = fs.readFileSync(manifestPath, 'utf8');
             const manifest = yaml.load(content) as Manifest;
-            
+
             // Validate manifest structure
             this.validateManifest(manifest);
-            
+
             return manifest;
         } catch (error) {
             throw new Error(`Failed to read manifest: ${error instanceof Error ? error.message : String(error)}`);
@@ -120,7 +120,7 @@ export class ManifestService {
      */
     async addJob(job: Job): Promise<void> {
         let manifest = await this.readManifest();
-        
+
         if (!manifest) {
             manifest = this.createEmptyManifest();
         }
@@ -139,7 +139,7 @@ export class ManifestService {
      */
     async updateJob(jobId: string, updates: Partial<Job>): Promise<void> {
         const manifest = await this.readManifest();
-        
+
         if (!manifest) {
             throw new Error('No manifest file exists');
         }
@@ -171,7 +171,7 @@ export class ManifestService {
      */
     async removeJob(jobId: string): Promise<void> {
         const manifest = await this.readManifest();
-        
+
         if (!manifest) {
             throw new Error('No manifest file exists');
         }
@@ -192,7 +192,7 @@ export class ManifestService {
      */
     async getJobsWithState(): Promise<JobWithState[]> {
         const manifest = await this.readManifest();
-        
+
         if (!manifest) {
             return [];
         }
@@ -339,5 +339,120 @@ export class ManifestService {
         }
 
         return manifest.jobs.find(j => j.job_id === jobId) || null;
+    }
+
+    /**
+     * Discover available checkpoints from completed jobs that match a given model type.
+     * Reads result.checkpoint_path from each job's response.yaml.
+     */
+    async getAvailableCheckpoints(modelType: string): Promise<CheckpointInfo[]> {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            return [];
+        }
+
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            return [];
+        }
+
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+            return [];
+        }
+
+        const checkpoints: CheckpointInfo[] = [];
+
+        for (const job of manifest.jobs) {
+            // Filter by model type
+            if (job.model.type !== modelType) {
+                continue;
+            }
+
+            const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
+            const responsePath = path.join(jobFolder, 'response.yaml');
+
+            // Check if response file exists
+            if (!fs.existsSync(responsePath)) {
+                continue;
+            }
+
+            try {
+                const responseContent = fs.readFileSync(responsePath, 'utf8');
+                const response = yaml.load(responseContent) as WorkerResponse;
+
+                // Only include completed jobs
+                if (response.state !== 'completed') {
+                    continue;
+                }
+
+                // Check for checkpoint path in result
+                const checkpointPath = response.result?.checkpoint_path;
+                if (!checkpointPath) {
+                    continue;
+                }
+
+                // Verify the checkpoint file actually exists
+                const absoluteCheckpointPath = path.resolve(workspaceRoot, checkpointPath);
+                if (!fs.existsSync(absoluteCheckpointPath)) {
+                    continue;
+                }
+
+                // Determine timestamp: prefer response.yaml timestamp, fall back to file mtime
+                let timestamp: string | undefined;
+                let fileTimestamp: Date | undefined;
+
+                if (response.timestamp) {
+                    // Validate the timestamp is parseable
+                    const parsed = new Date(response.timestamp);
+                    if (!isNaN(parsed.getTime())) {
+                        timestamp = response.timestamp;
+                    }
+                }
+
+                // Always get file timestamp as fallback
+                try {
+                    const stat = fs.statSync(responsePath);
+                    fileTimestamp = stat.mtime;
+                } catch {
+                    // Ignore stat errors
+                }
+
+                // If no valid timestamp from response, use file timestamp
+                if (!timestamp && fileTimestamp) {
+                    timestamp = fileTimestamp.toISOString();
+                }
+
+                // Determine if the job had verse filtering (training or inference)
+                const filtered = !!(
+                    job.training?.include_verses?.length ||
+                    job.training?.exclude_verses?.length ||
+                    job.inference?.include_verses?.length ||
+                    job.inference?.exclude_verses?.length
+                );
+
+                checkpoints.push({
+                    jobId: job.job_id,
+                    checkpointPath,
+                    modelType: job.model.type,
+                    epochs: job.epochs,
+                    timestamp,
+                    fileTimestamp,
+                    filtered
+                });
+            } catch {
+                // Skip jobs with unreadable response files
+                continue;
+            }
+        }
+
+        // Sort by timestamp descending (newest first)
+        checkpoints.sort((a, b) => {
+            const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        return checkpoints;
     }
 }

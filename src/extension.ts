@@ -255,23 +255,31 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Create the job
-			const jobId = manifestService.generateJobId();
-			const job = {
-				job_id: jobId,
-				job_type: 'tts' as const,
-				mode: jobParams.mode,
-				model: {
-					type: jobParams.modelType as 'StableTTS',
-					base_checkpoint: jobParams.baseCheckpoint
-				},
-				epochs: jobParams.epochs,
-				inference: (jobParams.includeVerses || jobParams.excludeVerses) ? {
+				const jobId = manifestService.generateJobId();
+				const hasVerseFilters = !!(jobParams.includeVerses || jobParams.excludeVerses);
+				const verseFilters = hasVerseFilters ? {
 					include_verses: jobParams.includeVerses,
 					exclude_verses: jobParams.excludeVerses
-				} : undefined,
-				voice_reference: jobParams.voiceReference,
-				canceled: false
-			};
+				} : undefined;
+
+				// Determine which configs to populate based on mode
+				const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
+				const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
+
+				const job = {
+					job_id: jobId,
+					job_type: 'tts' as const,
+					mode: jobParams.mode,
+					model: {
+						type: jobParams.modelType as 'StableTTS',
+						base_checkpoint: jobParams.baseCheckpoint
+					},
+					epochs: jobParams.epochs,
+					training: (needsTraining && verseFilters) ? verseFilters : undefined,
+					inference: (needsInference && verseFilters) ? verseFilters : undefined,
+					voice_reference: jobParams.voiceReference,
+					canceled: false
+				};
 
 			// Add job to manifest
 			await manifestService.addJob(job);
