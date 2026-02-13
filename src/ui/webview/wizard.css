@@ -1,0 +1,422 @@
+/* ============================================================
+ * Wizard Webview Styles
+ * Uses VS Code CSS custom properties for automatic theme support.
+ * ============================================================ */
+
+/* Reset & base */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: var(--vscode-font-size, 13px);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 16px 24px;
+    line-height: 1.5;
+}
+
+#wizard-root {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+/* ============================================================
+ * Common elements
+ * ============================================================ */
+
+h2 {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--vscode-foreground);
+}
+
+.task-subtitle {
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 16px;
+    font-size: 0.95em;
+}
+
+/* ============================================================
+ * Buttons
+ * ============================================================ */
+
+button {
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 2px;
+    padding: 6px 14px;
+    transition: opacity 0.1s;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:active {
+    opacity: 0.8;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.btn-primary:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.btn-secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.btn-secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-small {
+    padding: 3px 10px;
+    font-size: 0.9em;
+}
+
+.button-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: flex-end;
+}
+
+/* ============================================================
+ * QuickPick-like component
+ * ============================================================ */
+
+.quickpick-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.quickpick-item {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background-color: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.04));
+    transition: background-color 0.1s, border-color 0.1s;
+}
+
+.quickpick-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+    border-color: var(--vscode-focusBorder);
+}
+
+.quickpick-item:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.quickpick-item-label {
+    font-weight: 500;
+    color: var(--vscode-foreground);
+}
+
+.quickpick-item-description {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.quickpick-item-detail {
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+/* ============================================================
+ * InputBox-like component
+ * ============================================================ */
+
+.inputbox-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inputbox-prompt {
+    color: var(--vscode-descriptionForeground);
+}
+
+.inputbox-input {
+    width: 100%;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--vscode-input-foreground);
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: 2px;
+    outline: none;
+}
+
+.inputbox-input:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+.inputbox-error {
+    color: var(--vscode-errorForeground, #f44747);
+    font-size: 0.9em;
+}
+
+/* ============================================================
+ * Verse Selector component
+ * ============================================================ */
+
+.verse-selector-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.verse-selector-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.verse-filter-input {
+    width: 100%;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--vscode-input-foreground);
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: 2px;
+    outline: none;
+}
+
+.verse-filter-input:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+.verse-selector-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.verse-selector-controls label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    user-select: none;
+}
+
+.verse-selector-controls input[type="checkbox"] {
+    accent-color: var(--vscode-checkbox-background, var(--vscode-button-background));
+}
+
+.verse-selector-summary {
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    padding: 4px 0;
+    border-top: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+}
+
+.verse-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+}
+
+.verse-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s;
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.05));
+}
+
+.verse-item:last-child {
+    border-bottom: none;
+}
+
+.verse-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.verse-item input[type="checkbox"] {
+    flex-shrink: 0;
+    accent-color: var(--vscode-checkbox-background, var(--vscode-button-background));
+}
+
+.verse-item-ref {
+    flex: 1;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.95em;
+}
+
+.verse-item-audio-badge {
+    font-size: 0.8em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    flex-shrink: 0;
+}
+
+.verse-item-status {
+    font-size: 0.8em;
+    flex-shrink: 0;
+    min-width: 70px;
+    text-align: right;
+}
+
+/* Include mode: selected items are green */
+.verse-selector-include .verse-item.selected {
+    background-color: rgba(40, 167, 69, 0.15);
+}
+
+.verse-selector-include .verse-item.selected .verse-item-status {
+    color: #28a745;
+}
+
+/* Exclude mode: selected items are red/orange */
+.verse-selector-exclude .verse-item.selected {
+    background-color: rgba(220, 53, 69, 0.15);
+}
+
+.verse-selector-exclude .verse-item.selected .verse-item-status {
+    color: #dc3545;
+}
+
+/* Hidden items */
+.verse-item.hidden {
+    display: none;
+}
+
+/* ============================================================
+ * Confirmation page
+ * ============================================================ */
+
+.confirmation-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.confirmation-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.confirmation-section h3 {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 4px;
+}
+
+.confirmation-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.confirmation-label {
+    color: var(--vscode-descriptionForeground);
+    min-width: 140px;
+    flex-shrink: 0;
+}
+
+.confirmation-value {
+    color: var(--vscode-foreground);
+    font-weight: 500;
+}
+
+.confirmation-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: rgba(255, 204, 0, 0.1);
+    border-left: 3px solid #ffcc00;
+    border-radius: 2px;
+    font-size: 0.9em;
+    color: var(--vscode-foreground);
+}
+
+.confirmation-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border-left: 3px solid #dc3545;
+    border-radius: 2px;
+    font-size: 0.9em;
+    color: var(--vscode-foreground);
+}
+
+/* ============================================================
+ * Loading / transition state
+ * ============================================================ */
+
+.loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* ============================================================
+ * Scrollbar styling (match VS Code)
+ * ============================================================ */
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background-color: var(--vscode-scrollbarSlider-activeBackground);
+}

@@ -49,6 +49,7 @@ export interface Job {
     job_id: string; // Random unique ID
     job_type: 'tts'; // Extensible for future job types
     mode: JobMode;
+    submitted_at: string; // ISO 8601 timestamp of when the job was defined
     model: ModelConfig;
     epochs?: number; // Optional, for training
     training?: TrainingConfig; // Optional, for training mode

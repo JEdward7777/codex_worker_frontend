@@ -141,10 +141,14 @@ function activate(context) {
                 job_id: jobId,
                 job_type: 'tts',
                 mode: 'training_and_inference',
+                submitted_at: new Date().toISOString(),
                 model: {
                     type: 'StableTTS'
                 },
                 epochs: 100,
+                training: {
+                    include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3', 'GEN.1.4', 'GEN.1.5']
+                },
                 inference: {
                     include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3']
                 }
@@ -223,40 +227,40 @@ function activate(context) {
     // Register new job command
     const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
         try {
-            const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService);
+            const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService, context.extensionUri);
+            // The wizard now handles the entire flow including confirmation
             const jobParams = await wizard.run();
             if (!jobParams) {
                 // User cancelled
                 return;
             }
-            // Run preflight checks
-            const preflightResult = await preflightService.performChecks(jobParams);
-            // Show confirmation with preflight results
-            const confirmed = await wizard.showConfirmation(jobParams, preflightResult);
-            if (!confirmed) {
-                return;
-            }
             // Create the job
             const jobId = manifestService.generateJobId();
-            const hasVerseFilters = !!(jobParams.includeVerses || jobParams.excludeVerses);
-            const verseFilters = hasVerseFilters ? {
-                include_verses: jobParams.includeVerses,
-                exclude_verses: jobParams.excludeVerses
-            } : undefined;
-            // Determine which configs to populate based on mode
+            // Build separate training and inference configs
             const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
             const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
+            const hasTrainingFilters = !!(jobParams.trainingIncludeVerses || jobParams.trainingExcludeVerses);
+            const trainingConfig = (needsTraining && hasTrainingFilters) ? {
+                include_verses: jobParams.trainingIncludeVerses,
+                exclude_verses: jobParams.trainingExcludeVerses
+            } : undefined;
+            const hasInferenceFilters = !!(jobParams.inferenceIncludeVerses || jobParams.inferenceExcludeVerses);
+            const inferenceConfig = (needsInference && hasInferenceFilters) ? {
+                include_verses: jobParams.inferenceIncludeVerses,
+                exclude_verses: jobParams.inferenceExcludeVerses
+            } : undefined;
             const job = {
                 job_id: jobId,
                 job_type: 'tts',
                 mode: jobParams.mode,
+                submitted_at: new Date().toISOString(),
                 model: {
                     type: jobParams.modelType,
                     base_checkpoint: jobParams.baseCheckpoint
                 },
                 epochs: jobParams.epochs,
-                training: (needsTraining && verseFilters) ? verseFilters : undefined,
-                inference: (needsInference && verseFilters) ? verseFilters : undefined,
+                training: trainingConfig,
+                inference: inferenceConfig,
                 voice_reference: jobParams.voiceReference,
                 canceled: false
             };
@@ -709,7 +713,9 @@ class ManifestService {
         };
     }
     /**
-     * Add a job to the manifest
+     * Add a job to the manifest.
+     * Automatically sets submitted_at to the current ISO 8601 timestamp
+     * if it is not already provided.
      */
     async addJob(job) {
         let manifest = await this.readManifest();
@@ -719,6 +725,10 @@ class ManifestService {
         // Check for duplicate job ID
         if (manifest.jobs.some(j => j.job_id === job.job_id)) {
             throw new Error(`Job with ID ${job.job_id} already exists`);
+        }
+        // Auto-populate submitted_at if not already set
+        if (!job.submitted_at) {
+            job.submitted_at = new Date().toISOString();
         }
         manifest.jobs.push(job);
         await this.writeManifest(manifest);
@@ -5463,9 +5473,14 @@ class PreflightService {
         }
         // Check GitLab connectivity
         await this.checkGitLabConnectivity(errors);
-        // Validate verse selection
-        if (params.includeVerses || params.excludeVerses) {
-            this.validateVerseSelection(params, warnings);
+        // Validate verse selection for training and inference separately
+        const hasTrainingVerses = !!(params.trainingIncludeVerses || params.trainingExcludeVerses);
+        const hasInferenceVerses = !!(params.inferenceIncludeVerses || params.inferenceExcludeVerses);
+        if (hasTrainingVerses) {
+            this.validateVerseSelection(params.trainingIncludeVerses, params.trainingExcludeVerses, 'Training', warnings);
+        }
+        if (hasInferenceVerses) {
+            this.validateVerseSelection(params.inferenceIncludeVerses, params.inferenceExcludeVerses, 'Inference', warnings);
         }
         // Check if mode requires certain parameters
         this.validateModeRequirements(params, errors);
@@ -5522,13 +5537,10 @@ class PreflightService {
         try {
             const jobs = await this.manifestService.getJobsWithState();
             const runningJobs = jobs.filter(job => job.state === 'running');
-            if (runningJobs.length > 0) {
-                warnings.push(`${runningJobs.length} job(s) already running. ` +
-                    `Submitting another job may compete for GPU resources.`);
-            }
             const pendingJobs = jobs.filter(job => job.state === 'pending');
-            if (pendingJobs.length > 0) {
-                warnings.push(`${pendingJobs.length} job(s) pending. ` +
+            const activeCount = runningJobs.length + pendingJobs.length;
+            if (activeCount > 0) {
+                warnings.push(`${activeCount} job(s) already in the queue. ` +
                     `New job will be queued after existing jobs.`);
             }
         }
@@ -5580,21 +5592,21 @@ class PreflightService {
         }
     }
     /**
-     * Validate verse selection parameters
+     * Validate verse selection parameters for a given phase
      */
-    validateVerseSelection(params, warnings) {
-        if (params.includeVerses && params.excludeVerses) {
-            warnings.push('Both include and exclude verse lists specified. ' +
+    validateVerseSelection(includeVerses, excludeVerses, phase, warnings) {
+        if (includeVerses && excludeVerses) {
+            warnings.push(`${phase}: Both include and exclude verse lists specified. ` +
                 'Include list will take precedence.');
         }
-        if (params.includeVerses && params.includeVerses.length === 0) {
-            warnings.push('Include verse list is empty - no verses will be processed.');
+        if (includeVerses && includeVerses.length === 0) {
+            warnings.push(`${phase}: Include verse list is empty - no verses will be processed.`);
         }
         // Basic format validation for cell references
-        const allVerses = [...(params.includeVerses || []), ...(params.excludeVerses || [])];
+        const allVerses = [...(includeVerses || []), ...(excludeVerses || [])];
         for (const verse of allVerses) {
             if (!this.isValidVerseReference(verse)) {
-                warnings.push(`Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
+                warnings.push(`${phase}: Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
             }
         }
     }
@@ -5912,7 +5924,10 @@ exports.JobTreeDataProvider = JobTreeDataProvider;
 
 
 /**
- * Multi-step wizard for creating new GPU jobs
+ * Multi-step wizard for creating new GPU jobs.
+ *
+ * Uses WebviewUI for all user interaction. The extension drives the control
+ * flow via sequential `await` calls; the webview is a stateless terminal.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -5950,115 +5965,192 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.NewJobWizard = void 0;
 const vscode = __importStar(__webpack_require__(1));
+const WebviewUI_1 = __webpack_require__(36);
 /**
- * Wizard for creating new jobs
+ * Wizard for creating new jobs via a webview panel.
  */
 class NewJobWizard {
     audioDiscoveryService;
     manifestService;
-    constructor(audioDiscoveryService, manifestService) {
+    extensionUri;
+    constructor(audioDiscoveryService, manifestService, extensionUri) {
         this.audioDiscoveryService = audioDiscoveryService;
         this.manifestService = manifestService;
+        this.extensionUri = extensionUri;
     }
     /**
-     * Run the job creation wizard
-     * Returns the created job parameters or null if canceled
+     * Run the job creation wizard.
+     * Opens an ephemeral webview panel, walks the user through all steps,
+     * and returns the created job parameters or null if canceled.
      */
     async run() {
+        const ui = new WebviewUI_1.WebviewUI(this.extensionUri);
         try {
-            // Step 1: Select job mode
-            const mode = await this.selectMode();
-            if (!mode) {
-                return null;
-            }
-            // Step 2: Select model type
-            const modelType = await this.selectModelType();
-            if (!modelType) {
-                return null;
-            }
-            // Step 3: Select base checkpoint (optional for training, required for inference)
-            let currentMode = mode;
-            const baseCheckpoint = await this.selectBaseCheckpoint(currentMode, modelType);
-            if (baseCheckpoint === undefined) {
-                // For inference-only with no checkpoints, offer to switch to training_and_inference
-                if (currentMode === 'inference') {
-                    const switchMode = await vscode.window.showInformationMessage('No trained model checkpoints are available. Would you like to train a new model and then run inference?', 'Train & Infer', 'Cancel');
-                    if (switchMode === 'Train & Infer') {
-                        currentMode = 'training_and_inference';
-                        // No base checkpoint needed for training from scratch
-                    }
-                    else {
-                        return null; // User canceled
-                    }
+            let result = null;
+            let done = false;
+            while (!done) {
+                result = await this.runWizardSteps(ui);
+                if (!result) {
+                    // User canceled at some step
+                    break;
+                }
+                // Run preflight checks
+                const preflightResult = await this.runPreflightChecks(result);
+                // Build confirmation data
+                const totalVerses = await this.getTotalVerseCount();
+                const confirmData = this.buildConfirmationData(result, preflightResult, totalVerses);
+                // Show confirmation
+                const confirmAction = await ui.showConfirmation(confirmData);
+                if (confirmAction === 'submit') {
+                    done = true;
+                }
+                else if (confirmAction === 'start-over') {
+                    // Loop continues — restart wizard
+                    result = null;
                 }
                 else {
-                    return null; // User canceled
+                    // undefined = panel closed / canceled
+                    result = null;
+                    break;
                 }
             }
-            // Step 4: Select epochs (if training)
-            let epochs;
-            if (currentMode === 'training' || currentMode === 'training_and_inference') {
-                epochs = await this.selectEpochs();
-                if (epochs === undefined) {
-                    return null;
-                }
-            }
-            // Step 5: Select verses (if inference)
-            let includeVerses;
-            let excludeVerses;
-            if (currentMode === 'inference' || currentMode === 'training_and_inference') {
-                const verseSelection = await this.selectVerses();
-                if (!verseSelection) {
-                    return null;
-                }
-                includeVerses = verseSelection.include;
-                excludeVerses = verseSelection.exclude;
-            }
-            // Step 6: Select voice reference (optional)
-            const voiceReference = await this.selectVoiceReference();
-            if (voiceReference === undefined) {
-                return null;
-            }
-            return {
-                mode: currentMode,
-                modelType,
-                baseCheckpoint: baseCheckpoint || undefined,
-                epochs,
-                includeVerses,
-                excludeVerses,
-                voiceReference: voiceReference || undefined
-            };
+            return result;
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
             return null;
         }
+        finally {
+            ui.dispose();
+        }
     }
+    /**
+     * Run through all wizard steps sequentially.
+     * Returns JobCreationParams if all steps completed, or null if canceled.
+     */
+    async runWizardSteps(ui) {
+        // Step 1: Select job mode
+        const mode = await this.selectMode(ui);
+        if (!mode) {
+            return null;
+        }
+        // Step 2: Select model type
+        const modelType = await this.selectModelType(ui);
+        if (!modelType) {
+            return null;
+        }
+        // Step 3: Select base checkpoint
+        let currentMode = mode;
+        const baseCheckpoint = await this.selectBaseCheckpoint(ui, currentMode, modelType);
+        if (baseCheckpoint === undefined) {
+            // For inference-only with no checkpoints, offer to switch
+            if (currentMode === 'inference') {
+                const switchItem = await ui.showQuickPick([
+                    { label: 'Train & Infer', description: 'Train a new model first, then run inference' },
+                    { label: 'Cancel', description: 'Go back' },
+                ], {
+                    title: 'No Checkpoints Available',
+                    placeHolder: 'No trained model checkpoints found. Would you like to train first?',
+                });
+                if (switchItem?.label === 'Train & Infer') {
+                    currentMode = 'training_and_inference';
+                }
+                else {
+                    return null;
+                }
+            }
+            else {
+                return null;
+            }
+        }
+        // Step 4: Select epochs (if training)
+        let epochs;
+        if (currentMode === 'training' || currentMode === 'training_and_inference') {
+            epochs = await this.selectEpochs(ui);
+            if (epochs === undefined) {
+                return null;
+            }
+        }
+        // Step 5: Select verse filters
+        let inferenceIncludeVerses;
+        let inferenceExcludeVerses;
+        let trainingIncludeVerses;
+        let trainingExcludeVerses;
+        if (currentMode === 'training_and_inference') {
+            const trainingSelection = await this.selectVerses(ui, 'Training');
+            if (!trainingSelection) {
+                return null;
+            }
+            trainingIncludeVerses = trainingSelection.include;
+            trainingExcludeVerses = trainingSelection.exclude;
+            const inferenceSelection = await this.selectVerses(ui, 'Inference');
+            if (!inferenceSelection) {
+                return null;
+            }
+            inferenceIncludeVerses = inferenceSelection.include;
+            inferenceExcludeVerses = inferenceSelection.exclude;
+        }
+        else if (currentMode === 'training') {
+            const selection = await this.selectVerses(ui, 'Training');
+            if (!selection) {
+                return null;
+            }
+            trainingIncludeVerses = selection.include;
+            trainingExcludeVerses = selection.exclude;
+        }
+        else if (currentMode === 'inference') {
+            const selection = await this.selectVerses(ui, 'Inference');
+            if (!selection) {
+                return null;
+            }
+            inferenceIncludeVerses = selection.include;
+            inferenceExcludeVerses = selection.exclude;
+        }
+        // Step 6: Select voice reference
+        const voiceReference = await this.selectVoiceReference(ui);
+        if (voiceReference === undefined) {
+            return null;
+        }
+        return {
+            mode: currentMode,
+            modelType,
+            baseCheckpoint: baseCheckpoint || undefined,
+            epochs,
+            inferenceIncludeVerses,
+            inferenceExcludeVerses,
+            trainingIncludeVerses,
+            trainingExcludeVerses,
+            voiceReference: voiceReference || undefined,
+        };
+    }
+    // ================================================================
+    // Individual wizard steps
+    // ================================================================
     /**
      * Step 1: Select job mode
      */
-    async selectMode() {
+    async selectMode(ui) {
         const items = [
             {
                 label: 'Training',
                 description: 'Train a new TTS model',
-                detail: 'Creates a new model or fine-tunes an existing one'
+                detail: 'Creates a new model or fine-tunes an existing one',
             },
             {
                 label: 'Inference',
                 description: 'Generate audio from text',
-                detail: 'Uses an existing model to synthesize speech'
+                detail: 'Uses an existing model to synthesize speech',
             },
             {
                 label: 'Training and Inference',
                 description: 'Train then generate audio',
-                detail: 'Trains a model and then runs inference on selected verses'
-            }
+                detail: 'Trains a model and then runs inference on selected verses',
+            },
         ];
-        const selected = await vscode.window.showQuickPick(items, {
+        const selected = await ui.showQuickPick(items, {
             title: 'Select Job Mode',
-            placeHolder: 'What would you like to do?'
+            placeHolder: 'What would you like to do?',
         });
         if (!selected) {
             return null;
@@ -6066,24 +6158,24 @@ class NewJobWizard {
         const modeMap = {
             'Training': 'training',
             'Inference': 'inference',
-            'Training and Inference': 'training_and_inference'
+            'Training and Inference': 'training_and_inference',
         };
-        return modeMap[selected.label];
+        return modeMap[selected.label] || null;
     }
     /**
      * Step 2: Select model type
      */
-    async selectModelType() {
+    async selectModelType(ui) {
         const items = [
             {
                 label: 'StableTTS',
                 description: 'Stable Text-to-Speech model',
-                detail: 'High-quality TTS with good stability'
-            }
+                detail: 'High-quality TTS with good stability',
+            },
         ];
-        const selected = await vscode.window.showQuickPick(items, {
+        const selected = await ui.showQuickPick(items, {
             title: 'Select Model Type',
-            placeHolder: 'Which TTS model would you like to use?'
+            placeHolder: 'Which TTS model would you like to use?',
         });
         if (!selected) {
             return null;
@@ -6091,46 +6183,42 @@ class NewJobWizard {
         return selected.label;
     }
     /**
-     * Step 3: Select base checkpoint (optional for training, required for inference)
-     * Returns: checkpoint path string, null (no checkpoint / train from scratch), or undefined (canceled)
+     * Step 3: Select base checkpoint
+     * Returns: checkpoint path string, null (no checkpoint), or undefined (canceled)
      */
-    async selectBaseCheckpoint(mode, modelType) {
-        // For inference-only, base checkpoint is required
+    async selectBaseCheckpoint(ui, mode, modelType) {
         const isRequired = mode === 'inference';
         if (!isRequired) {
-            // For training modes, ask if they want to start fresh or use existing
             const items = [
                 {
-                    label: '$(new-file) Train New Model',
+                    label: 'Train New Model',
                     description: 'Start from scratch',
-                    detail: 'Create a brand new model without a base checkpoint'
+                    detail: 'Create a brand new model without a base checkpoint',
                 },
                 {
-                    label: '$(file) Continue From Existing Model',
+                    label: 'Continue From Existing Model',
                     description: 'Fine-tune an existing model',
-                    detail: 'Select a previously trained model as the base'
-                }
+                    detail: 'Select a previously trained model as the base',
+                },
             ];
-            const selected = await vscode.window.showQuickPick(items, {
+            const selected = await ui.showQuickPick(items, {
                 title: 'Base Model',
-                placeHolder: 'Start from scratch or fine-tune an existing model?'
+                placeHolder: 'Start from scratch or fine-tune an existing model?',
             });
             if (!selected) {
-                return undefined; // Canceled
+                return undefined;
             }
-            if (selected.label.includes('New Model')) {
+            if (selected.label === 'Train New Model') {
                 return null; // No base checkpoint
             }
         }
         // Pick a checkpoint from completed jobs
-        return this.pickCheckpoint(modelType);
+        return this.pickCheckpoint(ui, modelType);
     }
     /**
-     * Reusable checkpoint picker: shows a QuickPick of available checkpoints
-     * from completed jobs matching the given model type.
-     * Returns: checkpoint path string, or undefined if canceled or none available.
+     * Reusable checkpoint picker
      */
-    async pickCheckpoint(modelType) {
+    async pickCheckpoint(ui, modelType) {
         const checkpoints = await this.manifestService.getAvailableCheckpoints(modelType);
         if (checkpoints.length === 0) {
             vscode.window.showWarningMessage(`No trained model checkpoints found for model type "${modelType}". Complete a training job first.`);
@@ -6138,61 +6226,49 @@ class NewJobWizard {
         }
         const items = checkpoints.map(cp => {
             const parts = [];
-            // Epochs info
             if (cp.epochs) {
                 parts.push(`${cp.epochs} epochs`);
             }
-            // Date info
             if (cp.timestamp) {
                 try {
                     const date = new Date(cp.timestamp);
                     parts.push(date.toLocaleDateString());
                 }
                 catch {
-                    // Skip date if unparseable
+                    // Skip
                 }
             }
             else if (cp.fileTimestamp) {
                 parts.push(cp.fileTimestamp.toLocaleDateString());
             }
-            // Filtered indicator
             if (cp.filtered) {
                 parts.push('filtered');
             }
             return {
-                label: `$(file) ${cp.jobId}`,
+                label: cp.jobId,
                 description: parts.join(' • '),
-                detail: cp.checkpointPath
+                detail: cp.checkpointPath,
             };
         });
-        const selected = await vscode.window.showQuickPick(items, {
+        const selected = await ui.showQuickPick(items, {
             title: 'Select Model Checkpoint',
-            placeHolder: 'Choose a trained model checkpoint'
+            placeHolder: 'Choose a trained model checkpoint',
         });
         if (!selected) {
             return undefined;
         }
-        // The detail field contains the checkpoint path
         return selected.detail;
     }
     /**
      * Step 4: Select number of epochs
      */
-    async selectEpochs() {
-        const epochStr = await vscode.window.showInputBox({
+    async selectEpochs(ui) {
+        const epochStr = await ui.showInputBox({
             title: 'Training Epochs',
             prompt: 'How many epochs should the model train for?',
             value: '100',
-            validateInput: (value) => {
-                const num = parseInt(value, 10);
-                if (isNaN(num) || num <= 0) {
-                    return 'Please enter a positive number';
-                }
-                if (num > 10000) {
-                    return 'Epoch count seems too high (max: 10000)';
-                }
-                return null;
-            }
+            validationRegex: '^[1-9]\\d{0,3}$',
+            validationMessage: 'Please enter a positive number between 1 and 9999',
         });
         if (!epochStr) {
             return undefined;
@@ -6200,115 +6276,254 @@ class NewJobWizard {
         return parseInt(epochStr, 10);
     }
     /**
-     * Step 5: Select cells for inference
+     * Step 5: Select cells for a given phase (Training or Inference)
      */
-    async selectVerses() {
-        const items = [
+    async selectVerses(ui, phase) {
+        // First ask: all cells or specific?
+        const scopeItems = [
             {
-                label: '$(check-all) All Cells',
-                description: 'Generate audio for all cells',
-                detail: 'Process every cell in the project'
+                label: 'All Cells',
+                description: `Use all cells for ${phase.toLowerCase()}`,
+                detail: `Process every cell in the project for ${phase.toLowerCase()}`,
             },
             {
-                label: '$(list-selection) Specific Cells',
+                label: 'Specific Cells',
                 description: 'Choose which cells to include/exclude',
-                detail: 'Manually specify cell references'
-            }
+                detail: `Manually specify cell references for ${phase.toLowerCase()}`,
+            },
         ];
-        const selected = await vscode.window.showQuickPick(items, {
-            title: 'Cell Selection',
-            placeHolder: 'Which cells should be processed?'
+        const scopeSelected = await ui.showQuickPick(scopeItems, {
+            title: `${phase} Cell Selection`,
+            placeHolder: `Which cells should be used for ${phase.toLowerCase()}?`,
         });
-        if (!selected) {
+        if (!scopeSelected) {
             return null;
         }
-        if (selected.label.includes('All Cells')) {
+        if (scopeSelected.label === 'All Cells') {
             return {}; // No filters
         }
-        // Ask if they want to include or exclude
-        const filterType = await vscode.window.showQuickPick([
+        // Ask include or exclude
+        const filterTypeItems = [
             {
                 label: 'Include Specific Cells',
-                description: 'Only process these cells'
+                description: `Only use these cells for ${phase.toLowerCase()}`,
             },
             {
                 label: 'Exclude Specific Cells',
-                description: 'Process all except these cells'
-            }
-        ], {
-            title: 'Filter Type',
-            placeHolder: 'Include or exclude cells?'
+                description: `Use all except these cells for ${phase.toLowerCase()}`,
+            },
+        ];
+        const filterType = await ui.showQuickPick(filterTypeItems, {
+            title: `${phase} Filter Type`,
+            placeHolder: `Include or exclude cells for ${phase.toLowerCase()}?`,
         });
         if (!filterType) {
             return null;
         }
         const isInclude = filterType.label.includes('Include');
-        const versesInput = await vscode.window.showInputBox({
-            title: isInclude ? 'Include Cells' : 'Exclude Cells',
-            prompt: 'Enter cell references (comma-separated)',
-            placeHolder: 'e.g., JHN 1:1, cf5a575d-84e2-6dee-0e3a-06b719bcae7a, MAT 5:1',
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Please enter at least one cell reference';
-                }
-                // Basic validation - could be more sophisticated
-                return null;
-            }
+        const isInferenceInclude = phase === 'Inference' && isInclude;
+        // Discover all verses for the selector
+        const summary = await this.audioDiscoveryService.discoverAudio();
+        const verseSelectorItems = summary.verses.map(v => ({
+            cellId: v.cellId,
+            displayRef: v.verseRef || v.cellId,
+            hasAudio: v.hasAudio,
+        }));
+        // Show the interactive verse selector
+        const result = await ui.showVerseSelector(verseSelectorItems, {
+            phase,
+            selectionMode: isInclude ? 'include' : 'exclude',
+            showHideRecorded: isInferenceInclude,
         });
-        if (!versesInput) {
+        if (!result) {
             return null;
         }
-        // Parse the comma-separated list
-        const verses = versesInput
-            .split(',')
-            .map(v => v.trim())
-            .filter(v => v.length > 0);
+        if (result.selectedIds.length === 0) {
+            // Nothing selected — treat as "all" (no filter)
+            return {};
+        }
         return isInclude
-            ? { include: verses }
-            : { exclude: verses };
+            ? { include: result.selectedIds }
+            : { exclude: result.selectedIds };
     }
     /**
      * Step 6: Select voice reference (optional)
      */
-    async selectVoiceReference() {
-        const useReference = await vscode.window.showQuickPick([
+    async selectVoiceReference(ui) {
+        const items = [
             {
-                label: '$(pass) Use Default Voice',
-                description: 'No specific voice reference'
+                label: 'Use Default Voice',
+                description: 'No specific voice reference',
             },
             {
-                label: '$(mic) Specify Voice Reference',
-                description: 'Use a specific audio file as reference'
-            }
-        ], {
+                label: 'Specify Voice Reference',
+                description: 'Use a specific audio file as reference',
+            },
+        ];
+        const selected = await ui.showQuickPick(items, {
             title: 'Voice Reference',
-            placeHolder: 'Use a specific voice reference?'
+            placeHolder: 'Use a specific voice reference?',
         });
-        if (!useReference) {
+        if (!selected) {
             return undefined;
         }
-        if (useReference.label.includes('Default')) {
+        if (selected.label === 'Use Default Voice') {
             return null;
         }
-        const reference = await vscode.window.showInputBox({
+        const reference = await ui.showInputBox({
             title: 'Voice Reference',
             prompt: 'Enter the path to the voice reference audio file',
             placeHolder: 'e.g., .project/attachments/files/JHN/audio-1.webm',
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Please enter a file path';
-                }
-                return null;
-            }
         });
         return reference || undefined;
     }
+    // ================================================================
+    // Preflight & confirmation helpers
+    // ================================================================
     /**
-     * Show confirmation dialog with job details and preflight checks
+     * Run preflight checks (delegates to PreflightService via extension.ts)
+     * For now, we do a lightweight version here.
+     */
+    async runPreflightChecks(params) {
+        // We'll do a basic check here. The full preflight is done in extension.ts
+        // before actual job submission.
+        const errors = [];
+        const warnings = [];
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const totalPairs = summary.totalVerses;
+            const missingRecordings = summary.versesWithoutAudio;
+            const coveragePercentage = totalPairs > 0
+                ? (summary.versesWithAudio / totalPairs) * 100
+                : 0;
+            // Training checks
+            if (params.mode === 'training' || params.mode === 'training_and_inference') {
+                if (summary.versesWithAudio === 0) {
+                    errors.push('No audio recordings found. Training requires audio data.');
+                }
+                else if (summary.versesWithAudio < 50) {
+                    warnings.push(`Only ${summary.versesWithAudio} audio recordings found. ` +
+                        `Recommended minimum: 50 for quality training.`);
+                }
+            }
+            // Inference requires checkpoint
+            if (params.mode === 'inference' && !params.baseCheckpoint) {
+                errors.push('Inference mode requires a base checkpoint.');
+            }
+            // Training requires epochs
+            if ((params.mode === 'training' || params.mode === 'training_and_inference') && !params.epochs) {
+                errors.push('Training mode requires epoch count.');
+            }
+            // Check for queued jobs
+            const jobs = await this.manifestService.getJobsWithState();
+            const pendingJobs = jobs.filter(j => j.state === 'pending');
+            const runningJobs = jobs.filter(j => j.state === 'running');
+            if (pendingJobs.length > 0 || runningJobs.length > 0) {
+                const total = pendingJobs.length + runningJobs.length;
+                warnings.push(`${total} job(s) already in the queue. New job will be queued after existing jobs.`);
+            }
+            return {
+                passed: errors.length === 0,
+                errors,
+                warnings,
+                audioStats: { totalPairs, missingRecordings, coveragePercentage },
+            };
+        }
+        catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            errors.push(`Failed to analyze audio data: ${msg}`);
+            return {
+                passed: false,
+                errors,
+                warnings,
+                audioStats: { totalPairs: 0, missingRecordings: 0, coveragePercentage: 0 },
+            };
+        }
+    }
+    /**
+     * Get total verse count for confirmation display
+     */
+    async getTotalVerseCount() {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio();
+            return summary.totalVerses;
+        }
+        catch {
+            return 0;
+        }
+    }
+    /**
+     * Build the confirmation page data from job params and preflight results
+     */
+    buildConfirmationData(params, preflight, totalVerses) {
+        const data = {
+            mode: params.mode,
+            modelType: params.modelType,
+            baseCheckpoint: params.baseCheckpoint,
+            epochs: params.epochs,
+            voiceReference: params.voiceReference,
+            audioStats: preflight.audioStats,
+            warnings: preflight.warnings,
+            errors: preflight.errors,
+        };
+        // Training selection summary
+        if (params.mode === 'training' || params.mode === 'training_and_inference') {
+            if (params.trainingIncludeVerses && params.trainingIncludeVerses.length > 0) {
+                data.trainingSelection = {
+                    type: 'include',
+                    count: params.trainingIncludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else if (params.trainingExcludeVerses && params.trainingExcludeVerses.length > 0) {
+                data.trainingSelection = {
+                    type: 'exclude',
+                    count: params.trainingExcludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else {
+                data.trainingSelection = {
+                    type: 'all',
+                    totalCount: totalVerses,
+                };
+            }
+        }
+        // Inference selection summary
+        if (params.mode === 'inference' || params.mode === 'training_and_inference') {
+            if (params.inferenceIncludeVerses && params.inferenceIncludeVerses.length > 0) {
+                data.inferenceSelection = {
+                    type: 'include',
+                    count: params.inferenceIncludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else if (params.inferenceExcludeVerses && params.inferenceExcludeVerses.length > 0) {
+                data.inferenceSelection = {
+                    type: 'exclude',
+                    count: params.inferenceExcludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else {
+                data.inferenceSelection = {
+                    type: 'all',
+                    totalCount: totalVerses,
+                };
+            }
+        }
+        return data;
+    }
+    /**
+     * Show confirmation dialog with job details and preflight checks.
+     * This is the legacy method kept for backwards compatibility with extension.ts.
+     * The new flow uses the webview confirmation page instead.
      */
     async showConfirmation(params, preflightResult) {
+        // This method is no longer used in the new webview flow.
+        // The confirmation is handled inside run() via ui.showConfirmation().
+        // Kept for API compatibility in case it's called externally.
         const lines = [];
-        // Job configuration
         lines.push('**Job Configuration:**');
         lines.push(`- Mode: ${params.mode}`);
         lines.push(`- Model: ${params.modelType}`);
@@ -6318,51 +6533,269 @@ class NewJobWizard {
         if (params.epochs) {
             lines.push(`- Epochs: ${params.epochs}`);
         }
-        if (params.voiceReference) {
-            lines.push(`- Voice Reference: ${params.voiceReference}`);
-        }
         lines.push('');
-        // Audio statistics
         lines.push('**Audio Data:**');
         lines.push(`- Total Pairs: ${preflightResult.audioStats.totalPairs}`);
         lines.push(`- Missing Recordings: ${preflightResult.audioStats.missingRecordings}`);
         lines.push(`- Coverage: ${preflightResult.audioStats.coveragePercentage.toFixed(1)}%`);
-        lines.push('');
-        // Cell selection
-        if (params.includeVerses && params.includeVerses.length > 0) {
-            lines.push(`**Include Cells:** ${params.includeVerses.length} cells`);
-        }
-        if (params.excludeVerses && params.excludeVerses.length > 0) {
-            lines.push(`**Exclude Cells:** ${params.excludeVerses.length} cells`);
-        }
-        // Warnings
         if (preflightResult.warnings.length > 0) {
             lines.push('');
             lines.push('**⚠️ Warnings:**');
-            preflightResult.warnings.forEach(warning => {
-                lines.push(`- ${warning}`);
-            });
+            preflightResult.warnings.forEach(w => lines.push(`- ${w}`));
         }
-        // Errors
         if (preflightResult.errors.length > 0) {
             lines.push('');
             lines.push('**❌ Errors:**');
-            preflightResult.errors.forEach(error => {
-                lines.push(`- ${error}`);
-            });
+            preflightResult.errors.forEach(e => lines.push(`- ${e}`));
         }
         const message = lines.join('\n');
-        // If there are errors, show error message and don't allow submission
         if (!preflightResult.passed) {
             await vscode.window.showErrorMessage('Cannot submit job due to validation errors:\n\n' + message, { modal: true });
             return false;
         }
-        // Show confirmation dialog
         const action = await vscode.window.showInformationMessage(message, { modal: true }, 'Submit Job', 'Cancel');
         return action === 'Submit Job';
     }
 }
 exports.NewJobWizard = NewJobWizard;
+
+
+/***/ }),
+/* 36 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * WebviewUI — Task/Response wrapper for VS Code Webview panels.
+ *
+ * Provides an API backwards-compatible with vscode.window.showQuickPick / showInputBox
+ * but renders inside a webview panel. Also exposes rich task types like showVerseSelector.
+ *
+ * The extension always drives the control flow via sequential `await` calls.
+ * The webview is a stateless render-and-respond terminal.
+ * Panel close at any point resolves the pending promise to undefined/null (cancel).
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.WebviewUI = void 0;
+const vscode = __importStar(__webpack_require__(1));
+/**
+ * Manages a webview panel and provides an await-based task/response API.
+ */
+class WebviewUI {
+    extensionUri;
+    panel;
+    disposed = false;
+    taskCounter = 0;
+    pendingResolve = null;
+    pendingTaskId = null;
+    messageDisposable = null;
+    constructor(extensionUri) {
+        this.extensionUri = extensionUri;
+        this.panel = vscode.window.createWebviewPanel('codexWorkerWizard', 'New GPU Job', vscode.ViewColumn.One, {
+            enableScripts: true,
+            retainContextWhenHidden: false,
+            localResourceRoots: [
+                vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
+                vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
+            ],
+        });
+        // Set the HTML content
+        this.panel.webview.html = this.getHtmlContent();
+        // Handle panel disposal (user closes the tab)
+        this.panel.onDidDispose(() => {
+            this.disposed = true;
+            if (this.pendingResolve) {
+                this.pendingResolve(undefined);
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+            }
+            if (this.messageDisposable) {
+                this.messageDisposable.dispose();
+                this.messageDisposable = null;
+            }
+        });
+        // Set up message listener
+        this.messageDisposable = this.panel.webview.onDidReceiveMessage((msg) => {
+            if (!this.pendingResolve || !this.pendingTaskId) {
+                return;
+            }
+            if (msg.type === 'response' && msg.taskId === this.pendingTaskId) {
+                const resolve = this.pendingResolve;
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+                resolve(msg.result);
+            }
+            else if (msg.type === 'cancel' && msg.taskId === this.pendingTaskId) {
+                const resolve = this.pendingResolve;
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+                resolve(undefined);
+            }
+        });
+    }
+    /**
+     * Whether the panel has been disposed (closed by user or programmatically)
+     */
+    get isDisposed() {
+        return this.disposed;
+    }
+    /**
+     * Dispose the panel
+     */
+    dispose() {
+        if (!this.disposed) {
+            this.panel.dispose();
+        }
+    }
+    /**
+     * Send a task to the webview and wait for the response.
+     * Returns undefined if the panel is closed before a response.
+     */
+    async askWebview(taskPayload) {
+        if (this.disposed) {
+            return undefined;
+        }
+        const taskId = `task_${++this.taskCounter}`;
+        const fullTask = { type: 'task', taskId, ...taskPayload };
+        return new Promise((resolve) => {
+            this.pendingResolve = resolve;
+            this.pendingTaskId = taskId;
+            this.panel.webview.postMessage(fullTask);
+        });
+    }
+    // ================================================================
+    // Backwards-compatible API (mirrors vscode.window.showQuickPick / showInputBox)
+    // ================================================================
+    /**
+     * Show a QuickPick-like selection in the webview.
+     * API shape mirrors vscode.window.showQuickPick for easy migration.
+     */
+    async showQuickPick(items, options) {
+        return this.askWebview({
+            taskType: 'quickpick',
+            items,
+            title: options?.title,
+            placeHolder: options?.placeHolder,
+        });
+    }
+    /**
+     * Show an InputBox-like text input in the webview.
+     * API shape mirrors vscode.window.showInputBox for easy migration.
+     *
+     * Note: validateInput callbacks can't be sent to the webview, so we use
+     * validationRegex + validationMessage for simple validation, or skip it.
+     */
+    async showInputBox(options) {
+        return this.askWebview({
+            taskType: 'inputbox',
+            title: options?.title,
+            prompt: options?.prompt,
+            value: options?.value,
+            placeHolder: options?.placeHolder,
+            validationRegex: options?.validationRegex,
+            validationMessage: options?.validationMessage,
+        });
+    }
+    // ================================================================
+    // Rich task types (no native equivalent)
+    // ================================================================
+    /**
+     * Show the interactive verse selector.
+     * Returns the selected cell IDs, or undefined if canceled.
+     */
+    async showVerseSelector(verses, options) {
+        return this.askWebview({
+            taskType: 'verse-selector',
+            verses,
+            phase: options.phase,
+            selectionMode: options.selectionMode,
+            showHideRecorded: options.showHideRecorded,
+        });
+    }
+    /**
+     * Show the confirmation/review page.
+     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     */
+    async showConfirmation(data) {
+        return this.askWebview({
+            taskType: 'confirmation',
+            data,
+        });
+    }
+    // ================================================================
+    // HTML generation
+    // ================================================================
+    /**
+     * Generate the webview HTML content.
+     * Loads the external JS and CSS files from the webview directory.
+     */
+    getHtmlContent() {
+        const webview = this.panel.webview;
+        // Get URIs for webview resources
+        const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'src', 'ui', 'webview', 'wizard.css'));
+        const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'src', 'ui', 'webview', 'wizard.js'));
+        const nonce = getNonce();
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <link href="${cssUri}" rel="stylesheet">
+    <title>New GPU Job</title>
+</head>
+<body>
+    <div id="wizard-root"></div>
+    <script nonce="${nonce}" src="${jsUri}"></script>
+</body>
+</html>`;
+    }
+}
+exports.WebviewUI = WebviewUI;
+/**
+ * Generate a random nonce for Content Security Policy
+ */
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 
 
 /***/ })

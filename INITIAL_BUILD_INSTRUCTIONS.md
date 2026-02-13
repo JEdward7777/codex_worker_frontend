@@ -115,6 +115,7 @@ jobs:
   - job_id: <random unique ID>
     job_type: tts
     mode: training | inference | training_and_inference
+    submitted_at: <ISO 8601 timestamp>
     model:
       type: <tts model type>
       base_checkpoint: <optional path or ID>

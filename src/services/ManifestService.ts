@@ -116,7 +116,9 @@ export class ManifestService {
     }
 
     /**
-     * Add a job to the manifest
+     * Add a job to the manifest.
+     * Automatically sets submitted_at to the current ISO 8601 timestamp
+     * if it is not already provided.
      */
     async addJob(job: Job): Promise<void> {
         let manifest = await this.readManifest();
@@ -128,6 +130,11 @@ export class ManifestService {
         // Check for duplicate job ID
         if (manifest.jobs.some(j => j.job_id === job.job_id)) {
             throw new Error(`Job with ID ${job.job_id} already exists`);
+        }
+
+        // Auto-populate submitted_at if not already set
+        if (!job.submitted_at) {
+            job.submitted_at = new Date().toISOString();
         }
 
         manifest.jobs.push(job);

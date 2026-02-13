@@ -44,9 +44,18 @@ export class PreflightService {
         // Check GitLab connectivity
         await this.checkGitLabConnectivity(errors);
 
-        // Validate verse selection
-        if (params.includeVerses || params.excludeVerses) {
-            this.validateVerseSelection(params, warnings);
+        // Validate verse selection for training and inference separately
+        const hasTrainingVerses = !!(params.trainingIncludeVerses || params.trainingExcludeVerses);
+        const hasInferenceVerses = !!(params.inferenceIncludeVerses || params.inferenceExcludeVerses);
+        if (hasTrainingVerses) {
+            this.validateVerseSelection(
+                params.trainingIncludeVerses, params.trainingExcludeVerses, 'Training', warnings
+            );
+        }
+        if (hasInferenceVerses) {
+            this.validateVerseSelection(
+                params.inferenceIncludeVerses, params.inferenceExcludeVerses, 'Inference', warnings
+            );
         }
 
         // Check if mode requires certain parameters
@@ -115,18 +124,12 @@ export class PreflightService {
         try {
             const jobs = await this.manifestService.getJobsWithState();
             const runningJobs = jobs.filter(job => job.state === 'running');
-
-            if (runningJobs.length > 0) {
-                warnings.push(
-                    `${runningJobs.length} job(s) already running. ` +
-                    `Submitting another job may compete for GPU resources.`
-                );
-            }
-
             const pendingJobs = jobs.filter(job => job.state === 'pending');
-            if (pendingJobs.length > 0) {
+            const activeCount = runningJobs.length + pendingJobs.length;
+
+            if (activeCount > 0) {
                 warnings.push(
-                    `${pendingJobs.length} job(s) pending. ` +
+                    `${activeCount} job(s) already in the queue. ` +
                     `New job will be queued after existing jobs.`
                 );
             }
@@ -188,25 +191,30 @@ export class PreflightService {
     }
 
     /**
-     * Validate verse selection parameters
+     * Validate verse selection parameters for a given phase
      */
-    private validateVerseSelection(params: JobCreationParams, warnings: string[]): void {
-        if (params.includeVerses && params.excludeVerses) {
+    private validateVerseSelection(
+        includeVerses: string[] | undefined,
+        excludeVerses: string[] | undefined,
+        phase: string,
+        warnings: string[]
+    ): void {
+        if (includeVerses && excludeVerses) {
             warnings.push(
-                'Both include and exclude verse lists specified. ' +
+                `${phase}: Both include and exclude verse lists specified. ` +
                 'Include list will take precedence.'
             );
         }
 
-        if (params.includeVerses && params.includeVerses.length === 0) {
-            warnings.push('Include verse list is empty - no verses will be processed.');
+        if (includeVerses && includeVerses.length === 0) {
+            warnings.push(`${phase}: Include verse list is empty - no verses will be processed.`);
         }
 
         // Basic format validation for cell references
-        const allVerses = [...(params.includeVerses || []), ...(params.excludeVerses || [])];
+        const allVerses = [...(includeVerses || []), ...(excludeVerses || [])];
         for (const verse of allVerses) {
             if (!this.isValidVerseReference(verse)) {
-                warnings.push(`Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
+                warnings.push(`${phase}: Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
             }
         }
     }

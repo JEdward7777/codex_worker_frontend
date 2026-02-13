@@ -122,10 +122,14 @@ export function activate(context: vscode.ExtensionContext) {
 				job_id: jobId,
 				job_type: 'tts' as const,
 				mode: 'training_and_inference' as const,
+				submitted_at: new Date().toISOString(),
 				model: {
 					type: 'StableTTS' as const
 				},
 				epochs: 100,
+				training: {
+					include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3', 'GEN.1.4', 'GEN.1.5']
+				},
 				inference: {
 					include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3']
 				}
@@ -235,9 +239,11 @@ export function activate(context: vscode.ExtensionContext) {
 		try {
 			const wizard = new NewJobWizard(
 				audioDiscoveryService,
-				manifestService
+				manifestService,
+				context.extensionUri
 			);
 
+			// The wizard now handles the entire flow including confirmation
 			const jobParams = await wizard.run();
 
 			if (!jobParams) {
@@ -245,41 +251,40 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			// Run preflight checks
-			const preflightResult = await preflightService.performChecks(jobParams);
-
-			// Show confirmation with preflight results
-			const confirmed = await wizard.showConfirmation(jobParams, preflightResult);
-			if (!confirmed) {
-				return;
-			}
-
 			// Create the job
-				const jobId = manifestService.generateJobId();
-				const hasVerseFilters = !!(jobParams.includeVerses || jobParams.excludeVerses);
-				const verseFilters = hasVerseFilters ? {
-					include_verses: jobParams.includeVerses,
-					exclude_verses: jobParams.excludeVerses
-				} : undefined;
+			const jobId = manifestService.generateJobId();
 
-				// Determine which configs to populate based on mode
-				const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
-				const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
+			// Build separate training and inference configs
+			const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
+			const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
 
-				const job = {
-					job_id: jobId,
-					job_type: 'tts' as const,
-					mode: jobParams.mode,
-					model: {
-						type: jobParams.modelType as 'StableTTS',
-						base_checkpoint: jobParams.baseCheckpoint
-					},
-					epochs: jobParams.epochs,
-					training: (needsTraining && verseFilters) ? verseFilters : undefined,
-					inference: (needsInference && verseFilters) ? verseFilters : undefined,
-					voice_reference: jobParams.voiceReference,
-					canceled: false
-				};
+			const hasTrainingFilters = !!(jobParams.trainingIncludeVerses || jobParams.trainingExcludeVerses);
+			const trainingConfig = (needsTraining && hasTrainingFilters) ? {
+				include_verses: jobParams.trainingIncludeVerses,
+				exclude_verses: jobParams.trainingExcludeVerses
+			} : undefined;
+
+			const hasInferenceFilters = !!(jobParams.inferenceIncludeVerses || jobParams.inferenceExcludeVerses);
+			const inferenceConfig = (needsInference && hasInferenceFilters) ? {
+				include_verses: jobParams.inferenceIncludeVerses,
+				exclude_verses: jobParams.inferenceExcludeVerses
+			} : undefined;
+
+			const job = {
+				job_id: jobId,
+				job_type: 'tts' as const,
+				mode: jobParams.mode,
+				submitted_at: new Date().toISOString(),
+				model: {
+					type: jobParams.modelType as 'StableTTS',
+					base_checkpoint: jobParams.baseCheckpoint
+				},
+				epochs: jobParams.epochs,
+				training: trainingConfig,
+				inference: inferenceConfig,
+				voice_reference: jobParams.voiceReference,
+				canceled: false
+			};
 
 			// Add job to manifest
 			await manifestService.addJob(job);
