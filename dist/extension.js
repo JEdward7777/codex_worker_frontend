@@ -313,10 +313,19 @@ function activate(context) {
             console.error('Remove job error:', error);
         }
     });
-    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, treeView, refreshJobsDisposable, newJobDisposable, cancelJobDisposable);
+    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, jobTreeDataProvider, treeView, refreshJobsDisposable, newJobDisposable, cancelJobDisposable);
 }
 // This method is called when your extension is deactivated
-function deactivate() { }
+function deactivate() {
+    console.log('Codex Worker extension is deactivating...');
+    // Null out global service references to allow garbage collection
+    gitLabService = undefined;
+    manifestService = undefined;
+    audioDiscoveryService = undefined;
+    preflightService = undefined;
+    jobTreeDataProvider = undefined;
+    console.log('Codex Worker extension deactivated.');
+}
 
 
 /***/ }),
@@ -5845,6 +5854,12 @@ class JobTreeDataProvider {
     constructor(workspaceRoot, manifestService) {
         this.workspaceRoot = workspaceRoot;
         this.manifestService = manifestService;
+    }
+    /**
+     * Dispose resources held by this provider
+     */
+    dispose() {
+        this._onDidChangeTreeData.dispose();
     }
     /**
      * Refresh the tree view

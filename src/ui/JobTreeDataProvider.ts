@@ -16,7 +16,7 @@ export class JobTreeItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
         super(job.job_id, collapsibleState);
-        
+
         this.tooltip = this.buildTooltip();
         this.description = this.buildDescription();
         this.iconPath = this.getIconForState(job.state);
@@ -37,7 +37,7 @@ export class JobTreeItem extends vscode.TreeItem {
         }
 
         if (this.job.epochs) {
-            const progress = this.job.epochs_completed 
+            const progress = this.job.epochs_completed
                 ? `${this.job.epochs_completed}/${this.job.epochs}`
                 : `0/${this.job.epochs}`;
             lines.push(`Epochs: ${progress}`);
@@ -121,11 +121,11 @@ export class JobTreeItem extends vscode.TreeItem {
     private getContextValue(): string {
         // Context value determines which commands are available in the context menu
         const values: string[] = ['gpuJob'];
-        
+
         if (this.job.state === 'pending' || this.job.state === 'running') {
             values.push('cancelable');
         }
-        
+
         if (this.job.state === 'completed') {
             values.push('completed');
         }
@@ -137,16 +137,23 @@ export class JobTreeItem extends vscode.TreeItem {
 /**
  * Tree data provider for GPU jobs
  */
-export class JobTreeDataProvider implements vscode.TreeDataProvider<JobTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<JobTreeItem | undefined | null | void> = 
+export class JobTreeDataProvider implements vscode.TreeDataProvider<JobTreeItem>, vscode.Disposable {
+    private _onDidChangeTreeData: vscode.EventEmitter<JobTreeItem | undefined | null | void> =
         new vscode.EventEmitter<JobTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<JobTreeItem | undefined | null | void> = 
+    readonly onDidChangeTreeData: vscode.Event<JobTreeItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     constructor(
         private workspaceRoot: string,
         private manifestService: ManifestService
     ) {}
+
+    /**
+     * Dispose resources held by this provider
+     */
+    dispose(): void {
+        this._onDidChangeTreeData.dispose();
+    }
 
     /**
      * Refresh the tree view
@@ -179,7 +186,7 @@ export class JobTreeDataProvider implements vscode.TreeDataProvider<JobTreeItem>
         try {
             // Get all jobs with their states
             const jobs = await this.manifestService.getJobsWithState();
-            
+
             if (jobs.length === 0) {
                 return [];
             }
@@ -193,14 +200,14 @@ export class JobTreeDataProvider implements vscode.TreeDataProvider<JobTreeItem>
                     'failed': 3,
                     'canceled': 4
                 };
-                
+
                 const orderA = stateOrder[a.state] ?? 5;
                 const orderB = stateOrder[b.state] ?? 5;
-                
+
                 if (orderA !== orderB) {
                     return orderA - orderB;
                 }
-                
+
                 // Within same state, sort by job_id (newest first)
                 return b.job_id.localeCompare(a.job_id);
             });

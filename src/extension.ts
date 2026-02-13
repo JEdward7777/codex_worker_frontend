@@ -356,6 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
 		testGitLabDisposable,
 		testManifestDisposable,
 		testAudioDiscoveryDisposable,
+		jobTreeDataProvider,
 		treeView,
 		refreshJobsDisposable,
 		newJobDisposable,
@@ -364,4 +365,15 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+	console.log('Codex Worker extension is deactivating...');
+
+	// Null out global service references to allow garbage collection
+	gitLabService = undefined!;
+	manifestService = undefined!;
+	audioDiscoveryService = undefined!;
+	preflightService = undefined!;
+	jobTreeDataProvider = undefined!;
+
+	console.log('Codex Worker extension deactivated.');
+}
