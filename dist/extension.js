@@ -56,6 +56,8 @@ let manifestService;
 let audioDiscoveryService;
 let preflightService;
 let jobTreeDataProvider;
+// Track active wizard to prevent multiple panels
+let activeWizardRunning = false;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 function activate(context) {
@@ -226,6 +228,12 @@ function activate(context) {
     });
     // Register new job command
     const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
+        // Prevent multiple wizard panels
+        if (activeWizardRunning) {
+            vscode.window.showInformationMessage('A job wizard is already open.');
+            return;
+        }
+        activeWizardRunning = true;
         try {
             const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService, context.extensionUri);
             // The wizard now handles the entire flow including confirmation
@@ -276,6 +284,9 @@ function activate(context) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
             console.error('New job error:', error);
+        }
+        finally {
+            activeWizardRunning = false;
         }
     });
     // Register cancel job command
@@ -6626,7 +6637,7 @@ class WebviewUI {
         this.extensionUri = extensionUri;
         this.panel = vscode.window.createWebviewPanel('codexWorkerWizard', 'New GPU Job', vscode.ViewColumn.One, {
             enableScripts: true,
-            retainContextWhenHidden: false,
+            retainContextWhenHidden: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
                 vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),

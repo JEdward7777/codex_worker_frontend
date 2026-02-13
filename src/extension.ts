@@ -15,6 +15,9 @@ let audioDiscoveryService: AudioDiscoveryService;
 let preflightService: PreflightService;
 let jobTreeDataProvider: JobTreeDataProvider;
 
+// Track active wizard to prevent multiple panels
+let activeWizardRunning = false;
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -236,6 +239,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register new job command
 	const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
+		// Prevent multiple wizard panels
+		if (activeWizardRunning) {
+			vscode.window.showInformationMessage('A job wizard is already open.');
+			return;
+		}
+
+		activeWizardRunning = true;
 		try {
 			const wizard = new NewJobWizard(
 				audioDiscoveryService,
@@ -301,6 +311,8 @@ export function activate(context: vscode.ExtensionContext) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
 			console.error('New job error:', error);
+		} finally {
+			activeWizardRunning = false;
 		}
 	});
 

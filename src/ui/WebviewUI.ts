@@ -41,7 +41,7 @@ export class WebviewUI {
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                retainContextWhenHidden: false,
+                retainContextWhenHidden: true,
                 localResourceRoots: [
                     vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
                     vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
