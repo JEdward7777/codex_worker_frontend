@@ -34,6 +34,7 @@ export class WebviewUI {
 
     constructor(
         private extensionUri: vscode.Uri,
+        private workspaceRoot?: string,
     ) {
         this.panel = vscode.window.createWebviewPanel(
             'codexWorkerWizard',
@@ -45,6 +46,8 @@ export class WebviewUI {
                 localResourceRoots: [
                     vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
                     vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
+                    // Allow access to project attachments for audio playback
+                    ...(workspaceRoot ? [vscode.Uri.file(path.join(workspaceRoot, '.project', 'attachments'))] : []),
                 ],
             }
         );
@@ -68,7 +71,19 @@ export class WebviewUI {
 
         // Set up message listener
         this.messageDisposable = this.panel.webview.onDidReceiveMessage(
-            (msg: WebviewMessage) => {
+            (msg: any) => {
+                // Handle audio URI requests (non-task messages)
+                if (msg.type === 'get-audio-uri' && msg.filePath) {
+                    const fileUri = vscode.Uri.file(msg.filePath);
+                    const webviewUri = this.panel.webview.asWebviewUri(fileUri);
+                    this.panel.webview.postMessage({
+                        type: 'audio-uri',
+                        uri: webviewUri.toString(),
+                        requestId: msg.requestId,
+                    });
+                    return;
+                }
+
                 if (!this.pendingResolve || !this.pendingTaskId) {
                     return;
                 }
@@ -188,7 +203,38 @@ export class WebviewUI {
             phase: options.phase,
             selectionMode: options.selectionMode,
             showHideRecorded: options.showHideRecorded,
+            showPlayButton: options.showPlayButton,
+            allowSkip: options.allowSkip,
         });
+    }
+
+    /**
+     * Show the audio reference selector.
+     * Returns the selected audio path (pointers/ path for GPU worker),
+     * null if skipped, or undefined if canceled.
+     */
+    async showAudioReferenceSelector(
+        verses: VerseSelectorItem[]
+    ): Promise<string | null | undefined> {
+        const result = await this.askWebview<VerseSelectionResult>({
+            taskType: 'verse-selector',
+            verses,
+            phase: 'Reference Audio',
+            selectionMode: 'single-audio',
+            showHideRecorded: false,
+            showPlayButton: true,
+            allowSkip: true,
+        });
+
+        if (!result) {
+            return undefined; // Canceled
+        }
+
+        if (result.selectedIds.length === 0) {
+            return null; // Skipped
+        }
+
+        return result.selectedAudioPath || null;
     }
 
     /**
@@ -230,7 +276,7 @@ export class WebviewUI {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};">
     <link href="${cssUri}" rel="stylesheet">
     <title>New GPU Job</title>
 </head>

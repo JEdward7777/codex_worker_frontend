@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import {
     JobCreationParams,
     PreflightCheckResult,
@@ -22,11 +23,15 @@ import { WebviewUI } from './WebviewUI';
  * Wizard for creating new jobs via a webview panel.
  */
 export class NewJobWizard {
+    private workspaceRoot: string;
+
     constructor(
         private audioDiscoveryService: AudioDiscoveryService,
         private manifestService: ManifestService,
         private extensionUri: vscode.Uri,
-    ) {}
+    ) {
+        this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    }
 
     /**
      * Run the job creation wizard.
@@ -34,7 +39,7 @@ export class NewJobWizard {
      * and returns the created job parameters or null if canceled.
      */
     async run(): Promise<JobCreationParams | null> {
-        const ui = new WebviewUI(this.extensionUri);
+        const ui = new WebviewUI(this.extensionUri, this.workspaceRoot);
 
         try {
             let result: JobCreationParams | null = null;
@@ -432,8 +437,8 @@ export class NewJobWizard {
                 description: 'No specific voice reference',
             },
             {
-                label: 'Specify Voice Reference',
-                description: 'Use a specific audio file as reference',
+                label: 'Select Reference Audio',
+                description: 'Choose from recorded verses',
             },
         ];
 
@@ -448,13 +453,37 @@ export class NewJobWizard {
             return null;
         }
 
-        const reference = await ui.showInputBox({
-            title: 'Voice Reference',
-            prompt: 'Enter the path to the voice reference audio file',
-            placeHolder: 'e.g., .project/attachments/files/JHN/audio-1.webm',
+        // Get all verses with audio for the selector
+        const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+        const versesWithAudio = summary.verses.filter(v => v.hasAudio);
+
+        if (versesWithAudio.length === 0) {
+            vscode.window.showWarningMessage('No audio recordings found for reference selection.');
+            return null;
+        }
+
+        // Build selector items with local audio info
+        const selectorItems: VerseSelectorItem[] = versesWithAudio.map(v => {
+            let audioFilePath: string | undefined;
+
+            if (v.hasLocalAudio && v.audioPath && this.workspaceRoot) {
+                // Build absolute path to files/ folder for playback
+                audioFilePath = path.join(this.workspaceRoot, v.audioPath);
+            }
+
+            return {
+                cellId: v.cellId,
+                displayRef: v.verseRef || v.cellId,
+                hasAudio: v.hasAudio,
+                hasLocalAudio: v.hasLocalAudio,
+                audioFilePath,
+            };
         });
 
-        return reference || undefined;
+        // Show the audio reference selector
+        const selectedPath = await ui.showAudioReferenceSelector(selectorItems);
+
+        return selectedPath; // Returns pointer path, null (skipped), or undefined (canceled)
     }
 
     // ================================================================

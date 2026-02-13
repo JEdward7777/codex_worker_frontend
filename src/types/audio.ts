@@ -65,8 +65,10 @@ export interface VerseAudio {
     verse?: number;
     /** Verse text content */
     text: string;
-    /** Whether this verse has valid audio */
+    /** Whether this verse has valid audio (exists in files/ or pointers/ folder) */
     hasAudio: boolean;
+    /** Whether the actual audio file exists locally in the files/ folder (for playback) */
+    hasLocalAudio?: boolean;
     /** Path to the audio file (relative to project root) */
     audioPath?: string;
     /** Selected audio ID */

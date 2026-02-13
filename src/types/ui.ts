@@ -88,10 +88,14 @@ export interface WebviewQuickPickItem {
 export interface VerseSelectorOptions {
     /** Phase label: 'Training' or 'Inference' */
     phase: string;
-    /** Selection mode: include or exclude */
-    selectionMode: 'include' | 'exclude';
+    /** Selection mode: include, exclude, or single-audio (for reference audio selection) */
+    selectionMode: 'include' | 'exclude' | 'single-audio';
     /** Whether to show the "hide already recorded" checkbox (inference include only) */
     showHideRecorded: boolean;
+    /** Whether to show play buttons for audio preview (requires hasLocalAudio on items) */
+    showPlayButton?: boolean;
+    /** Whether to show a Skip button for optional selections */
+    allowSkip?: boolean;
 }
 
 /**
@@ -104,6 +108,10 @@ export interface VerseSelectorItem {
     displayRef: string;
     /** Whether this cell has an audio recording */
     hasAudio: boolean;
+    /** Whether the actual audio file exists locally for playback */
+    hasLocalAudio?: boolean;
+    /** Absolute path to the audio file in the files/ folder (for playback via webview URI) */
+    audioFilePath?: string;
 }
 
 /**
@@ -112,6 +120,8 @@ export interface VerseSelectorItem {
 export interface VerseSelectionResult {
     /** The cell IDs that were selected */
     selectedIds: string[];
+    /** For single-audio mode: the selected audio path (pointers/ path for GPU worker) */
+    selectedAudioPath?: string;
 }
 
 /**
@@ -186,8 +196,10 @@ export interface VerseSelectorTask extends WebviewTaskBase {
     taskType: 'verse-selector';
     verses: VerseSelectorItem[];
     phase: string;
-    selectionMode: 'include' | 'exclude';
+    selectionMode: 'include' | 'exclude' | 'single-audio';
     showHideRecorded: boolean;
+    showPlayButton?: boolean;
+    allowSkip?: boolean;
 }
 
 /**

@@ -248,6 +248,7 @@ export class AudioDiscoveryService {
 
         // Check for audio
         let hasAudio = false;
+        let hasLocalAudio = false;
         let audioPath: string | undefined;
         let audioId: string | undefined;
 
@@ -261,27 +262,51 @@ export class AudioDiscoveryService {
                 // e.g., ".project/attachments/files/JHN/audio-xxx.webm"
                 const relativeAudioPath = selectedAudio.url;
 
-                // Convert to absolute path
-                const absoluteAudioPath = path.join(
+                // Convert to absolute path for the files/ folder
+                const absoluteFilesPath = path.join(
                     path.dirname(codexFilePath),
                     '..',
                     '..',
                     relativeAudioPath
                 );
 
+                // Build the corresponding pointers/ path
+                const absolutePointersPath = absoluteFilesPath.replace(
+                    `${path.sep}.project${path.sep}attachments${path.sep}files${path.sep}`,
+                    `${path.sep}.project${path.sep}attachments${path.sep}pointers${path.sep}`
+                );
+
                 // Validate file exists if requested
                 if (options.validateFiles) {
+                    // Check files/ folder (actual local audio)
+                    let filesExists = false;
                     try {
-                        await fs.access(absoluteAudioPath);
-                        hasAudio = true;
-                        audioPath = relativeAudioPath;
+                        await fs.access(absoluteFilesPath);
+                        filesExists = true;
                     } catch {
-                        // File doesn't exist
-                        hasAudio = false;
+                        // File doesn't exist in files/
+                    }
+
+                    // Check pointers/ folder (LFS pointer)
+                    let pointersExists = false;
+                    try {
+                        await fs.access(absolutePointersPath);
+                        pointersExists = true;
+                    } catch {
+                        // File doesn't exist in pointers/
+                    }
+
+                    // Audio exists if it's in either location
+                    hasAudio = filesExists || pointersExists;
+                    // Local audio only if actual file is in files/ folder
+                    hasLocalAudio = filesExists;
+                    if (hasAudio) {
+                        audioPath = relativeAudioPath;
                     }
                 } else {
-                    // Assume it exists
+                    // Assume it exists based on metadata
                     hasAudio = true;
+                    hasLocalAudio = false; // Unknown without validation
                     audioPath = relativeAudioPath;
                 }
             }
@@ -295,6 +320,7 @@ export class AudioDiscoveryService {
             verse: parsedRef?.verse,
             text: cell.value,
             hasAudio,
+            hasLocalAudio,
             audioPath,
             audioId
         };

@@ -321,6 +321,58 @@ button:disabled {
 }
 
 /* ============================================================
+ * Single-audio selection mode (reference audio picker)
+ * ============================================================ */
+
+/* Hide multi-select controls in single-audio mode */
+.verse-selector-single-audio .verse-selector-controls {
+    display: none;
+}
+
+.verse-selector-single-audio .verse-item input[type="checkbox"] {
+    display: none;
+}
+
+.verse-selector-single-audio .verse-item-status {
+    display: none;
+}
+
+/* Highlight on hover in single-audio mode */
+.verse-selector-single-audio .verse-item:hover {
+    background-color: var(--vscode-list-activeSelectionBackground, rgba(0, 120, 212, 0.2));
+}
+
+/* ============================================================
+ * Audio play button
+ * ============================================================ */
+
+.verse-play-button {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    transition: background-color 0.1s, transform 0.05s;
+}
+
+.verse-play-button:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.verse-play-button:active {
+    transform: scale(0.95);
+}
+
+.verse-play-button.playing {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+/* ============================================================
  * Confirmation page
  * ============================================================ */
 

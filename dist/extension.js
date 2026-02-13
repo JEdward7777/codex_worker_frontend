@@ -5328,6 +5328,7 @@ class AudioDiscoveryService {
         }
         // Check for audio
         let hasAudio = false;
+        let hasLocalAudio = false;
         let audioPath;
         let audioId;
         if (cell.metadata.attachments && cell.metadata.selectedAudioId) {
@@ -5337,23 +5338,42 @@ class AudioDiscoveryService {
                 // The URL in the .codex file is relative to the project root
                 // e.g., ".project/attachments/files/JHN/audio-xxx.webm"
                 const relativeAudioPath = selectedAudio.url;
-                // Convert to absolute path
-                const absoluteAudioPath = path.join(path.dirname(codexFilePath), '..', '..', relativeAudioPath);
+                // Convert to absolute path for the files/ folder
+                const absoluteFilesPath = path.join(path.dirname(codexFilePath), '..', '..', relativeAudioPath);
+                // Build the corresponding pointers/ path
+                const absolutePointersPath = absoluteFilesPath.replace(`${path.sep}.project${path.sep}attachments${path.sep}files${path.sep}`, `${path.sep}.project${path.sep}attachments${path.sep}pointers${path.sep}`);
                 // Validate file exists if requested
                 if (options.validateFiles) {
+                    // Check files/ folder (actual local audio)
+                    let filesExists = false;
                     try {
-                        await fs.access(absoluteAudioPath);
-                        hasAudio = true;
-                        audioPath = relativeAudioPath;
+                        await fs.access(absoluteFilesPath);
+                        filesExists = true;
                     }
                     catch {
-                        // File doesn't exist
-                        hasAudio = false;
+                        // File doesn't exist in files/
+                    }
+                    // Check pointers/ folder (LFS pointer)
+                    let pointersExists = false;
+                    try {
+                        await fs.access(absolutePointersPath);
+                        pointersExists = true;
+                    }
+                    catch {
+                        // File doesn't exist in pointers/
+                    }
+                    // Audio exists if it's in either location
+                    hasAudio = filesExists || pointersExists;
+                    // Local audio only if actual file is in files/ folder
+                    hasLocalAudio = filesExists;
+                    if (hasAudio) {
+                        audioPath = relativeAudioPath;
                     }
                 }
                 else {
-                    // Assume it exists
+                    // Assume it exists based on metadata
                     hasAudio = true;
+                    hasLocalAudio = false; // Unknown without validation
                     audioPath = relativeAudioPath;
                 }
             }
@@ -5366,6 +5386,7 @@ class AudioDiscoveryService {
             verse: parsedRef?.verse,
             text: cell.value,
             hasAudio,
+            hasLocalAudio,
             audioPath,
             audioId
         };
@@ -5991,6 +6012,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.NewJobWizard = void 0;
 const vscode = __importStar(__webpack_require__(1));
+const path = __importStar(__webpack_require__(4));
 const WebviewUI_1 = __webpack_require__(36);
 /**
  * Wizard for creating new jobs via a webview panel.
@@ -5999,10 +6021,12 @@ class NewJobWizard {
     audioDiscoveryService;
     manifestService;
     extensionUri;
+    workspaceRoot;
     constructor(audioDiscoveryService, manifestService, extensionUri) {
         this.audioDiscoveryService = audioDiscoveryService;
         this.manifestService = manifestService;
         this.extensionUri = extensionUri;
+        this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     }
     /**
      * Run the job creation wizard.
@@ -6010,7 +6034,7 @@ class NewJobWizard {
      * and returns the created job parameters or null if canceled.
      */
     async run() {
-        const ui = new WebviewUI_1.WebviewUI(this.extensionUri);
+        const ui = new WebviewUI_1.WebviewUI(this.extensionUri, this.workspaceRoot);
         try {
             let result = null;
             let done = false;
@@ -6382,8 +6406,8 @@ class NewJobWizard {
                 description: 'No specific voice reference',
             },
             {
-                label: 'Specify Voice Reference',
-                description: 'Use a specific audio file as reference',
+                label: 'Select Reference Audio',
+                description: 'Choose from recorded verses',
             },
         ];
         const selected = await ui.showQuickPick(items, {
@@ -6396,12 +6420,31 @@ class NewJobWizard {
         if (selected.label === 'Use Default Voice') {
             return null;
         }
-        const reference = await ui.showInputBox({
-            title: 'Voice Reference',
-            prompt: 'Enter the path to the voice reference audio file',
-            placeHolder: 'e.g., .project/attachments/files/JHN/audio-1.webm',
+        // Get all verses with audio for the selector
+        const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+        const versesWithAudio = summary.verses.filter(v => v.hasAudio);
+        if (versesWithAudio.length === 0) {
+            vscode.window.showWarningMessage('No audio recordings found for reference selection.');
+            return null;
+        }
+        // Build selector items with local audio info
+        const selectorItems = versesWithAudio.map(v => {
+            let audioFilePath;
+            if (v.hasLocalAudio && v.audioPath && this.workspaceRoot) {
+                // Build absolute path to files/ folder for playback
+                audioFilePath = path.join(this.workspaceRoot, v.audioPath);
+            }
+            return {
+                cellId: v.cellId,
+                displayRef: v.verseRef || v.cellId,
+                hasAudio: v.hasAudio,
+                hasLocalAudio: v.hasLocalAudio,
+                audioFilePath,
+            };
         });
-        return reference || undefined;
+        // Show the audio reference selector
+        const selectedPath = await ui.showAudioReferenceSelector(selectorItems);
+        return selectedPath; // Returns pointer path, null (skipped), or undefined (canceled)
     }
     // ================================================================
     // Preflight & confirmation helpers
@@ -6637,25 +6680,30 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.WebviewUI = void 0;
 const vscode = __importStar(__webpack_require__(1));
+const path = __importStar(__webpack_require__(4));
 /**
  * Manages a webview panel and provides an await-based task/response API.
  */
 class WebviewUI {
     extensionUri;
+    workspaceRoot;
     panel;
     disposed = false;
     taskCounter = 0;
     pendingResolve = null;
     pendingTaskId = null;
     messageDisposable = null;
-    constructor(extensionUri) {
+    constructor(extensionUri, workspaceRoot) {
         this.extensionUri = extensionUri;
+        this.workspaceRoot = workspaceRoot;
         this.panel = vscode.window.createWebviewPanel('codexWorkerWizard', 'New GPU Job', vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
                 vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
+                // Allow access to project attachments for audio playback
+                ...(workspaceRoot ? [vscode.Uri.file(path.join(workspaceRoot, '.project', 'attachments'))] : []),
             ],
         });
         // Set the HTML content
@@ -6675,6 +6723,17 @@ class WebviewUI {
         });
         // Set up message listener
         this.messageDisposable = this.panel.webview.onDidReceiveMessage((msg) => {
+            // Handle audio URI requests (non-task messages)
+            if (msg.type === 'get-audio-uri' && msg.filePath) {
+                const fileUri = vscode.Uri.file(msg.filePath);
+                const webviewUri = this.panel.webview.asWebviewUri(fileUri);
+                this.panel.webview.postMessage({
+                    type: 'audio-uri',
+                    uri: webviewUri.toString(),
+                    requestId: msg.requestId,
+                });
+                return;
+            }
             if (!this.pendingResolve || !this.pendingTaskId) {
                 return;
             }
@@ -6769,7 +6828,32 @@ class WebviewUI {
             phase: options.phase,
             selectionMode: options.selectionMode,
             showHideRecorded: options.showHideRecorded,
+            showPlayButton: options.showPlayButton,
+            allowSkip: options.allowSkip,
         });
+    }
+    /**
+     * Show the audio reference selector.
+     * Returns the selected audio path (pointers/ path for GPU worker),
+     * null if skipped, or undefined if canceled.
+     */
+    async showAudioReferenceSelector(verses) {
+        const result = await this.askWebview({
+            taskType: 'verse-selector',
+            verses,
+            phase: 'Reference Audio',
+            selectionMode: 'single-audio',
+            showHideRecorded: false,
+            showPlayButton: true,
+            allowSkip: true,
+        });
+        if (!result) {
+            return undefined; // Canceled
+        }
+        if (result.selectedIds.length === 0) {
+            return null; // Skipped
+        }
+        return result.selectedAudioPath || null;
     }
     /**
      * Show the confirmation/review page.
@@ -6799,7 +6883,7 @@ class WebviewUI {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};">
     <link href="${cssUri}" rel="stylesheet">
     <title>New GPU Job</title>
 </head>

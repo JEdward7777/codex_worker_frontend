@@ -292,15 +292,75 @@
     // Verse Selector component
     // ================================================================
 
+    /** Currently playing audio element (shared across all play buttons) */
+    let currentAudio = null;
+    let currentPlayButton = null;
+
+    /**
+     * Stop any currently playing audio
+     */
+    function stopCurrentAudio() {
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            currentAudio = null;
+        }
+        if (currentPlayButton) {
+            currentPlayButton.textContent = '▶';
+            currentPlayButton.classList.remove('playing');
+            currentPlayButton = null;
+        }
+    }
+
+    /**
+     * Handle audio URI response from extension
+     */
+    window.addEventListener('message', (event) => {
+        const message = event.data;
+        if (message.type === 'audio-uri' && message.uri) {
+            stopCurrentAudio();
+
+            const audio = new Audio(message.uri);
+            currentAudio = audio;
+
+            // Find the play button that requested this
+            const btn = document.querySelector('[data-request-id="' + message.requestId + '"]');
+            if (btn) {
+                currentPlayButton = btn;
+                btn.textContent = '⏹';
+                btn.classList.add('playing');
+            }
+
+            audio.addEventListener('ended', () => {
+                stopCurrentAudio();
+            });
+
+            audio.addEventListener('error', () => {
+                stopCurrentAudio();
+            });
+
+            audio.play().catch(() => {
+                stopCurrentAudio();
+            });
+        }
+    });
+
     /**
      * Render the interactive verse selector
+     * Supports three modes:
+     *   - 'include': multi-select, include mode (green)
+     *   - 'exclude': multi-select, exclude mode (red)
+     *   - 'single-audio': single-select for reference audio picking
      * @param {object} task
      */
     function renderVerseSelector(task) {
-        const verses = task.verses; // Array of { cellId, displayRef, hasAudio }
-        const selectionMode = task.selectionMode; // 'include' or 'exclude'
-        const phase = task.phase; // 'Training' or 'Inference'
+        const verses = task.verses; // Array of { cellId, displayRef, hasAudio, hasLocalAudio?, audioFilePath? }
+        const selectionMode = task.selectionMode; // 'include', 'exclude', or 'single-audio'
+        const phase = task.phase; // 'Training', 'Inference', or 'Reference Audio'
         const showHideRecorded = task.showHideRecorded;
+        const showPlayButton = task.showPlayButton || false;
+        const allowSkip = task.allowSkip || false;
+        const isSingleAudio = selectionMode === 'single-audio';
 
         // State
         const selectedIds = new Set();
@@ -308,8 +368,18 @@
         let hideRecorded = false;
 
         // Mode-specific labels
-        const selectedLabel = selectionMode === 'include' ? '✓ Included' : '✗ Excluded';
-        const modeClass = selectionMode === 'include' ? 'verse-selector-include' : 'verse-selector-exclude';
+        let selectedLabel = '';
+        let modeClass = '';
+        if (isSingleAudio) {
+            selectedLabel = '';
+            modeClass = 'verse-selector-single-audio';
+        } else if (selectionMode === 'include') {
+            selectedLabel = '✓ Included';
+            modeClass = 'verse-selector-include';
+        } else {
+            selectedLabel = '✗ Excluded';
+            modeClass = 'verse-selector-exclude';
+        }
 
         // Build DOM
         const container = document.createElement('div');
@@ -317,14 +387,22 @@
 
         // Title
         const title = document.createElement('h2');
-        title.textContent = phase + ' Cell Selection — ' + (selectionMode === 'include' ? 'Include' : 'Exclude') + ' Mode';
+        if (isSingleAudio) {
+            title.textContent = 'Select Reference Audio';
+        } else {
+            title.textContent = phase + ' Cell Selection — ' + (selectionMode === 'include' ? 'Include' : 'Exclude') + ' Mode';
+        }
         container.appendChild(title);
 
         const subtitle = document.createElement('div');
         subtitle.className = 'task-subtitle';
-        subtitle.textContent = selectionMode === 'include'
-            ? 'Select cells to include in ' + phase.toLowerCase() + '. Only selected cells will be processed.'
-            : 'Select cells to exclude from ' + phase.toLowerCase() + '. Selected cells will be skipped.';
+        if (isSingleAudio) {
+            subtitle.textContent = 'Select a recorded verse to use as the voice reference for inference. Click a row to select it.';
+        } else if (selectionMode === 'include') {
+            subtitle.textContent = 'Select cells to include in ' + phase.toLowerCase() + '. Only selected cells will be processed.';
+        } else {
+            subtitle.textContent = 'Select cells to exclude from ' + phase.toLowerCase() + '. Selected cells will be skipped.';
+        }
         container.appendChild(subtitle);
 
         // Header section
@@ -338,7 +416,7 @@
         filterInput.placeholder = 'Filter by reference (e.g., MAT, MAT 1:, JHN 3:16)...';
         header.appendChild(filterInput);
 
-        // Controls row
+        // Controls row (hidden in single-audio mode via CSS)
         const controls = document.createElement('div');
         controls.className = 'verse-selector-controls';
 
@@ -379,6 +457,9 @@
         const listContainer = document.createElement('div');
         listContainer.className = 'verse-list';
 
+        // Audio request counter for unique IDs
+        let audioRequestCounter = 0;
+
         // Pre-build all verse elements
         const verseElements = [];
         for (let i = 0; i < verses.length; i++) {
@@ -387,6 +468,7 @@
             el.className = 'verse-item';
             el.dataset.index = String(i);
 
+            // Checkbox (hidden in single-audio mode via CSS)
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.tabIndex = -1;
@@ -404,29 +486,96 @@
                 el.appendChild(badge);
             }
 
+            // Play button (shown when showPlayButton is true and verse has local audio)
+            if (showPlayButton && verse.hasLocalAudio && verse.audioFilePath) {
+                const playBtn = document.createElement('button');
+                playBtn.className = 'verse-play-button';
+                playBtn.textContent = '▶';
+                playBtn.title = 'Preview audio';
+
+                playBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Don't trigger row selection
+
+                    // If this button is already playing, stop it
+                    if (currentPlayButton === playBtn) {
+                        stopCurrentAudio();
+                        return;
+                    }
+
+                    // Request audio URI from extension
+                    const requestId = 'audio_' + (++audioRequestCounter);
+                    playBtn.dataset.requestId = requestId;
+
+                    vscode.postMessage({
+                        type: 'get-audio-uri',
+                        filePath: verse.audioFilePath,
+                        requestId: requestId,
+                    });
+                });
+
+                el.appendChild(playBtn);
+            }
+
+            // Status label (hidden in single-audio mode via CSS)
             const status = document.createElement('span');
             status.className = 'verse-item-status';
             el.appendChild(status);
 
-            // Click handler — toggle selection
-            el.addEventListener('click', (e) => {
-                if (e.target === checkbox) {
-                    // Checkbox click — toggle is already handled by the checkbox
-                    if (checkbox.checked) {
-                        selectedIds.add(verse.cellId);
-                    } else {
-                        selectedIds.delete(verse.cellId);
+            if (isSingleAudio) {
+                // Single-audio mode: click selects and responds immediately
+                el.addEventListener('click', (e) => {
+                    // Don't select when clicking play button
+                    if (e.target && e.target.classList && e.target.classList.contains('verse-play-button')) {
+                        return;
                     }
-                } else {
-                    // Row click — toggle
-                    if (selectedIds.has(verse.cellId)) {
-                        selectedIds.delete(verse.cellId);
-                    } else {
-                        selectedIds.add(verse.cellId);
+
+                    // Stop any playing audio
+                    stopCurrentAudio();
+
+                    // Convert files/ path to pointers/ path for GPU worker
+                    let pointerPath = verse.audioFilePath || '';
+                    if (pointerPath) {
+                        // The audioFilePath is an absolute path to files/ folder
+                        // We need to return a relative path using pointers/ folder
+                        // e.g., ".project/attachments/pointers/JHN/audio-xxx.webm"
+                        const filesMarker = '.project/attachments/files/';
+                        const idx = pointerPath.indexOf(filesMarker);
+                        if (idx !== -1) {
+                            pointerPath = '.project/attachments/pointers/' + pointerPath.substring(idx + filesMarker.length);
+                        }
                     }
-                }
-                updateDisplay();
-            });
+
+                    respond({
+                        selectedIds: [verse.cellId],
+                        selectedAudioPath: pointerPath,
+                    });
+                });
+            } else {
+                // Multi-select mode: click toggles selection
+                el.addEventListener('click', (e) => {
+                    // Don't toggle when clicking play button
+                    if (e.target && e.target.classList && e.target.classList.contains('verse-play-button')) {
+                        return;
+                    }
+
+                    if (e.target === checkbox) {
+                        // Checkbox click — toggle is already handled by the checkbox
+                        if (checkbox.checked) {
+                            selectedIds.add(verse.cellId);
+                        } else {
+                            selectedIds.delete(verse.cellId);
+                        }
+                    } else {
+                        // Row click — toggle
+                        if (selectedIds.has(verse.cellId)) {
+                            selectedIds.delete(verse.cellId);
+                        } else {
+                            selectedIds.add(verse.cellId);
+                        }
+                    }
+                    updateDisplay();
+                });
+            }
 
             verseElements.push({ el, checkbox, status, verse });
             listContainer.appendChild(el);
@@ -441,16 +590,36 @@
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn-secondary';
         cancelBtn.textContent = 'Cancel';
-        cancelBtn.addEventListener('click', cancel);
+        cancelBtn.addEventListener('click', () => {
+            stopCurrentAudio();
+            cancel();
+        });
         buttonRow.appendChild(cancelBtn);
 
-        const doneBtn = document.createElement('button');
-        doneBtn.className = 'btn-primary';
-        doneBtn.textContent = 'Done';
-        doneBtn.addEventListener('click', () => {
-            respond({ selectedIds: Array.from(selectedIds) });
-        });
-        buttonRow.appendChild(doneBtn);
+        // Skip button (for optional selections like reference audio)
+        if (allowSkip) {
+            const skipBtn = document.createElement('button');
+            skipBtn.className = 'btn-secondary';
+            skipBtn.textContent = 'Skip';
+            skipBtn.title = 'Continue without selecting';
+            skipBtn.addEventListener('click', () => {
+                stopCurrentAudio();
+                respond({ selectedIds: [] });
+            });
+            buttonRow.appendChild(skipBtn);
+        }
+
+        // Done button (only in multi-select mode)
+        if (!isSingleAudio) {
+            const doneBtn = document.createElement('button');
+            doneBtn.className = 'btn-primary';
+            doneBtn.textContent = 'Done';
+            doneBtn.addEventListener('click', () => {
+                stopCurrentAudio();
+                respond({ selectedIds: Array.from(selectedIds) });
+            });
+            buttonRow.appendChild(doneBtn);
+        }
 
         container.appendChild(buttonRow);
 
@@ -462,7 +631,7 @@
             updateDisplay();
         });
 
-        // Select All in View
+        // Select All in View (only relevant in multi-select mode)
         selectAllCheckbox.addEventListener('change', () => {
             if (selectAllCheckbox.checked) {
                 // Select all visible
@@ -545,30 +714,38 @@
                     ve.el.classList.add('hidden');
                 }
 
-                // Selection state
-                ve.checkbox.checked = selected;
-                if (selected) {
-                    ve.el.classList.add('selected');
-                    ve.status.textContent = selectedLabel;
-                } else {
-                    ve.el.classList.remove('selected');
-                    ve.status.textContent = '';
+                // Selection state (only relevant in multi-select mode)
+                if (!isSingleAudio) {
+                    ve.checkbox.checked = selected;
+                    if (selected) {
+                        ve.el.classList.add('selected');
+                        ve.status.textContent = selectedLabel;
+                    } else {
+                        ve.el.classList.remove('selected');
+                        ve.status.textContent = '';
+                    }
                 }
             }
 
             // Update summary
-            summary.textContent = visibleCount + ' of ' + verses.length + ' visible \u2502 ' + selectedIds.size + ' selected';
-
-            // Update select-all checkbox state (tri-state)
-            if (visibleCount === 0 || visibleSelectedCount === 0) {
-                selectAllCheckbox.checked = false;
-                selectAllCheckbox.indeterminate = false;
-            } else if (visibleSelectedCount === visibleCount) {
-                selectAllCheckbox.checked = true;
-                selectAllCheckbox.indeterminate = false;
+            if (isSingleAudio) {
+                summary.textContent = visibleCount + ' of ' + verses.length + ' verses shown';
             } else {
-                selectAllCheckbox.checked = false;
-                selectAllCheckbox.indeterminate = true;
+                summary.textContent = visibleCount + ' of ' + verses.length + ' visible \u2502 ' + selectedIds.size + ' selected';
+            }
+
+            // Update select-all checkbox state (tri-state) — only in multi-select mode
+            if (!isSingleAudio) {
+                if (visibleCount === 0 || visibleSelectedCount === 0) {
+                    selectAllCheckbox.checked = false;
+                    selectAllCheckbox.indeterminate = false;
+                } else if (visibleSelectedCount === visibleCount) {
+                    selectAllCheckbox.checked = true;
+                    selectAllCheckbox.indeterminate = false;
+                } else {
+                    selectAllCheckbox.checked = false;
+                    selectAllCheckbox.indeterminate = true;
+                }
             }
         }
 
