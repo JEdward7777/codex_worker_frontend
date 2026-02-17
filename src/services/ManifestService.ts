@@ -195,6 +195,26 @@ export class ManifestService {
     }
 
     /**
+     * Delete the job folder from disk (gpu_jobs/job_<id>/).
+     * This removes the response file, model checkpoint, logs, and all other artifacts.
+     * Does nothing if the folder doesn't exist.
+     */
+    async deleteJobFolder(jobId: string): Promise<void> {
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            return;
+        }
+
+        const jobFolder = path.join(jobsDir, `job_${jobId}`);
+        if (!fs.existsSync(jobFolder)) {
+            return;
+        }
+
+        // Recursively delete the job folder
+        fs.rmSync(jobFolder, { recursive: true, force: true });
+    }
+
+    /**
      * Get all jobs with their current state from filesystem
      */
     async getJobsWithState(): Promise<JobWithState[]> {

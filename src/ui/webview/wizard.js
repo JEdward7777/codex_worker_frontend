@@ -86,6 +86,9 @@
             case 'confirmation':
                 renderConfirmation(task);
                 break;
+            case 'job-detail':
+                renderJobDetail(task);
+                break;
             default:
                 root.innerHTML = '<div class="loading-container">Unknown task type</div>';
         }
@@ -903,6 +906,258 @@
 
         container.appendChild(buttonRow);
         root.appendChild(container);
+    }
+
+    // ================================================================
+    // Job Detail component
+    // ================================================================
+
+    /**
+     * Render the job detail view with information and action buttons.
+     * @param {object} task
+     */
+    function renderJobDetail(task) {
+        const data = task.data;
+
+        const container = document.createElement('div');
+        container.className = 'job-detail-container';
+
+        // Header with status badge
+        const header = document.createElement('div');
+        header.className = 'job-detail-header';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Job Details';
+        header.appendChild(title);
+
+        const badge = document.createElement('span');
+        badge.className = 'job-detail-badge job-detail-badge-' + data.state;
+        badge.textContent = formatState(data.state, data.canceled);
+        header.appendChild(badge);
+
+        container.appendChild(header);
+
+        // Job ID
+        const jobIdRow = document.createElement('div');
+        jobIdRow.className = 'job-detail-id';
+        jobIdRow.textContent = data.jobId;
+        container.appendChild(jobIdRow);
+
+        // Configuration section
+        const configSection = document.createElement('div');
+        configSection.className = 'confirmation-section';
+        const configTitle = document.createElement('h3');
+        configTitle.textContent = 'Configuration';
+        configSection.appendChild(configTitle);
+
+        addRow(configSection, 'Mode', formatMode(data.mode));
+        addRow(configSection, 'Model', data.modelType);
+        addRow(configSection, 'Job Type', data.jobType);
+
+        if (data.baseCheckpoint) {
+            addRow(configSection, 'Base Checkpoint', data.baseCheckpoint);
+        }
+
+        if (data.epochs) {
+            let epochsText = String(data.epochs);
+            if (data.epochsCompleted !== undefined && data.epochsCompleted !== null) {
+                epochsText = data.epochsCompleted + ' / ' + data.epochs;
+            }
+            addRow(configSection, 'Epochs', epochsText);
+        }
+
+        if (data.voiceReference) {
+            addRow(configSection, 'Voice Reference', data.voiceReference);
+        }
+
+        container.appendChild(configSection);
+
+        // Status section
+        const statusSection = document.createElement('div');
+        statusSection.className = 'confirmation-section';
+        const statusTitle = document.createElement('h3');
+        statusTitle.textContent = 'Status';
+        statusSection.appendChild(statusTitle);
+
+        addRow(statusSection, 'State', formatState(data.state, data.canceled));
+
+        if (data.workerId) {
+            addRow(statusSection, 'Worker', data.workerId);
+        }
+
+        if (data.submittedAt) {
+            addRow(statusSection, 'Submitted', formatTimestamp(data.submittedAt));
+        }
+
+        if (data.responseTimestamp) {
+            const label = (data.state === 'completed' || data.state === 'failed' || data.state === 'canceled')
+                ? 'Completed' : 'Last Update';
+            addRow(statusSection, label, formatTimestamp(data.responseTimestamp));
+        }
+
+        if (data.errorMessage) {
+            addRow(statusSection, 'Error', data.errorMessage);
+        }
+
+        container.appendChild(statusSection);
+
+        // Verse selection section (if applicable)
+        if (data.trainingVerseCount !== undefined && data.trainingVerseCount !== null) {
+            const trainSection = document.createElement('div');
+            trainSection.className = 'confirmation-section';
+            const trainTitle = document.createElement('h3');
+            trainTitle.textContent = 'Training Selection';
+            trainSection.appendChild(trainTitle);
+            addRow(trainSection, 'Filtered Verses', String(data.trainingVerseCount));
+            container.appendChild(trainSection);
+        }
+
+        if (data.inferenceVerseCount !== undefined && data.inferenceVerseCount !== null) {
+            const inferSection = document.createElement('div');
+            inferSection.className = 'confirmation-section';
+            const inferTitle = document.createElement('h3');
+            inferTitle.textContent = 'Inference Selection';
+            inferSection.appendChild(inferTitle);
+            addRow(inferSection, 'Filtered Verses', String(data.inferenceVerseCount));
+            container.appendChild(inferSection);
+        }
+
+        // Action buttons
+        if (data.availableActions && data.availableActions.length > 0) {
+            const actionsSection = document.createElement('div');
+            actionsSection.className = 'job-detail-actions';
+            const actionsTitle = document.createElement('h3');
+            actionsTitle.textContent = 'Actions';
+            actionsSection.appendChild(actionsTitle);
+
+            const buttonRow = document.createElement('div');
+            buttonRow.className = 'job-detail-button-row';
+
+            for (const action of data.availableActions) {
+                const btn = document.createElement('button');
+                btn.className = getActionButtonClass(action);
+                btn.textContent = getActionLabel(action);
+                btn.title = getActionTooltip(action);
+                btn.addEventListener('click', () => {
+                    respond(action);
+                });
+                buttonRow.appendChild(btn);
+            }
+
+            actionsSection.appendChild(buttonRow);
+            container.appendChild(actionsSection);
+        }
+
+        // Close button (always available)
+        const footerRow = document.createElement('div');
+        footerRow.className = 'button-row';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn-secondary';
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', cancel);
+        footerRow.appendChild(closeBtn);
+        container.appendChild(footerRow);
+
+        root.appendChild(container);
+    }
+
+    /**
+     * Format a job state for display
+     * @param {string} state
+     * @param {boolean} canceled
+     * @returns {string}
+     */
+    function formatState(state, canceled) {
+        if (canceled && state !== 'canceled') {
+            return getStateEmoji(state) + ' ' + capitalizeFirst(state) + ' (canceling)';
+        }
+        return getStateEmoji(state) + ' ' + capitalizeFirst(state);
+    }
+
+    /**
+     * Get emoji for a job state
+     * @param {string} state
+     * @returns {string}
+     */
+    function getStateEmoji(state) {
+        switch (state) {
+            case 'pending': return '⏳';
+            case 'running': return '▶️';
+            case 'completed': return '✅';
+            case 'failed': return '❌';
+            case 'canceled': return '🚫';
+            default: return '❓';
+        }
+    }
+
+    /**
+     * Capitalize the first letter of a string
+     * @param {string} str
+     * @returns {string}
+     */
+    function capitalizeFirst(str) {
+        if (!str) { return str; }
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    /**
+     * Format an ISO timestamp for display
+     * @param {string} iso
+     * @returns {string}
+     */
+    function formatTimestamp(iso) {
+        try {
+            const date = new Date(iso);
+            if (isNaN(date.getTime())) { return iso; }
+            return date.toLocaleString();
+        } catch {
+            return iso;
+        }
+    }
+
+    /**
+     * Get the CSS class for an action button
+     * @param {string} action
+     * @returns {string}
+     */
+    function getActionButtonClass(action) {
+        switch (action) {
+            case 'cancel-job': return 'btn-warning';
+            case 'delete-job': return 'btn-danger';
+            case 'further-train': return 'btn-primary';
+            case 'run-inference': return 'btn-primary';
+            default: return 'btn-secondary';
+        }
+    }
+
+    /**
+     * Get the display label for an action
+     * @param {string} action
+     * @returns {string}
+     */
+    function getActionLabel(action) {
+        switch (action) {
+            case 'cancel-job': return '⏹ Cancel Job';
+            case 'delete-job': return '🗑 Delete Job';
+            case 'further-train': return '🔄 Further Train';
+            case 'run-inference': return '🔊 Run Inference';
+            default: return action;
+        }
+    }
+
+    /**
+     * Get the tooltip for an action button
+     * @param {string} action
+     * @returns {string}
+     */
+    function getActionTooltip(action) {
+        switch (action) {
+            case 'cancel-job': return 'Cancel this running or pending job';
+            case 'delete-job': return 'Delete this job and its model files permanently';
+            case 'further-train': return 'Create a new training job using this model as a base';
+            case 'run-inference': return 'Create a new inference job using this model';
+            default: return '';
+        }
     }
 
     // ================================================================

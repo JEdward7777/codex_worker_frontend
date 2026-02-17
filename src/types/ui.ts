@@ -154,6 +154,43 @@ export interface ConfirmationPageData {
 }
 
 // ============================================================
+// Job Detail Types
+// ============================================================
+
+/**
+ * Actions available from the job detail view
+ */
+export type JobDetailAction =
+    | 'cancel-job'
+    | 'delete-job'
+    | 'further-train'
+    | 'run-inference';
+
+/**
+ * Data sent to the job detail view for rendering
+ */
+export interface JobDetailData {
+    jobId: string;
+    jobType: string;
+    mode: string;
+    state: JobState;
+    modelType: string;
+    baseCheckpoint?: string;
+    epochs?: number;
+    epochsCompleted?: number;
+    workerId?: string;
+    submittedAt?: string;
+    responseTimestamp?: string;
+    errorMessage?: string;
+    canceled: boolean;
+    trainingVerseCount?: number;
+    inferenceVerseCount?: number;
+    voiceReference?: string;
+    /** Which actions are valid for this job's current state */
+    availableActions: JobDetailAction[];
+}
+
+// ============================================================
 // Webview Message Protocol
 // ============================================================
 
@@ -211,9 +248,17 @@ export interface ConfirmationTask extends WebviewTaskBase {
 }
 
 /**
+ * Job detail task
+ */
+export interface JobDetailTask extends WebviewTaskBase {
+    taskType: 'job-detail';
+    data: JobDetailData;
+}
+
+/**
  * Union of all task types
  */
-export type WebviewTask = QuickPickTask | InputBoxTask | VerseSelectorTask | ConfirmationTask;
+export type WebviewTask = QuickPickTask | InputBoxTask | VerseSelectorTask | ConfirmationTask | JobDetailTask;
 
 /**
  * Response message sent from webview to extension

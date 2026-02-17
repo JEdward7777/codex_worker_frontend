@@ -6,7 +6,10 @@ import { ManifestService } from './services/ManifestService';
 import { AudioDiscoveryService } from './services/AudioDiscoveryService';
 import { PreflightService } from './services/PreflightService';
 import { JobTreeDataProvider, JobTreeItem } from './ui/JobTreeDataProvider';
-import { NewJobWizard } from './ui/NewJobWizard';
+import { NewJobWizard, WizardPresets } from './ui/NewJobWizard';
+import { JobDetailPanel } from './ui/JobDetailPanel';
+import { JobCreationParams } from './types/ui';
+import { TTSModelType } from './types/manifest';
 
 // Global service instances
 let gitLabService: GitLabService;
@@ -15,8 +18,8 @@ let audioDiscoveryService: AudioDiscoveryService;
 let preflightService: PreflightService;
 let jobTreeDataProvider: JobTreeDataProvider;
 
-// Track active wizard to prevent multiple panels
-let activeWizardRunning = false;
+// Track active panel (wizard or detail) to prevent multiple panels
+let activePanelRunning = false;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -237,82 +240,157 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Job list refreshed');
 	});
 
+	/**
+	 * Create a job from wizard parameters: builds the manifest entry,
+	 * adds it, shares the project, and refreshes the tree.
+	 * Returns the new job ID, or null if creation failed.
+	 */
+	async function createJobFromParams(jobParams: JobCreationParams): Promise<string | null> {
+		const jobId = manifestService.generateJobId();
+
+		// Build separate training and inference configs
+		const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
+		const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
+
+		const hasTrainingFilters = !!(jobParams.trainingIncludeVerses || jobParams.trainingExcludeVerses);
+		const trainingConfig = (needsTraining && hasTrainingFilters) ? {
+			include_verses: jobParams.trainingIncludeVerses,
+			exclude_verses: jobParams.trainingExcludeVerses
+		} : undefined;
+
+		const hasInferenceFilters = !!(jobParams.inferenceIncludeVerses || jobParams.inferenceExcludeVerses);
+		const inferenceConfig = (needsInference && hasInferenceFilters) ? {
+			include_verses: jobParams.inferenceIncludeVerses,
+			exclude_verses: jobParams.inferenceExcludeVerses
+		} : undefined;
+
+		const job = {
+			job_id: jobId,
+			job_type: 'tts' as const,
+			mode: jobParams.mode,
+			submitted_at: new Date().toISOString(),
+			model: {
+				type: jobParams.modelType as 'StableTTS',
+				base_checkpoint: jobParams.baseCheckpoint
+			},
+			epochs: jobParams.epochs,
+			training: trainingConfig,
+			inference: inferenceConfig,
+			voice_reference: jobParams.voiceReference,
+			canceled: false
+		};
+
+		// Add job to manifest
+		await manifestService.addJob(job);
+
+		// Share project with worker
+		await gitLabService.shareProjectWithWorker();
+
+		// Refresh the tree view
+		await jobTreeDataProvider.refresh();
+
+		return jobId;
+	}
+
+	/**
+	 * Run the new job wizard (optionally with presets) and create the job.
+	 * Returns the new job ID, or null if the user canceled.
+	 */
+	async function runWizardAndCreateJob(presets?: WizardPresets): Promise<string | null> {
+		const wizard = new NewJobWizard(
+			audioDiscoveryService,
+			manifestService,
+			context.extensionUri
+		);
+
+		const jobParams = await wizard.run(presets);
+		if (!jobParams) {
+			return null;
+		}
+
+		return createJobFromParams(jobParams);
+	}
+
 	// Register new job command
 	const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
-		// Prevent multiple wizard panels
-		if (activeWizardRunning) {
-			vscode.window.showInformationMessage('A job wizard is already open.');
+		// Prevent multiple panels
+		if (activePanelRunning) {
+			vscode.window.showInformationMessage('A job panel is already open.');
 			return;
 		}
 
-		activeWizardRunning = true;
+		activePanelRunning = true;
 		try {
-			const wizard = new NewJobWizard(
-				audioDiscoveryService,
-				manifestService,
-				context.extensionUri
-			);
-
-			// The wizard now handles the entire flow including confirmation
-			const jobParams = await wizard.run();
-
-			if (!jobParams) {
-				// User cancelled
-				return;
+			const jobId = await runWizardAndCreateJob();
+			if (jobId) {
+				vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
 			}
-
-			// Create the job
-			const jobId = manifestService.generateJobId();
-
-			// Build separate training and inference configs
-			const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
-			const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
-
-			const hasTrainingFilters = !!(jobParams.trainingIncludeVerses || jobParams.trainingExcludeVerses);
-			const trainingConfig = (needsTraining && hasTrainingFilters) ? {
-				include_verses: jobParams.trainingIncludeVerses,
-				exclude_verses: jobParams.trainingExcludeVerses
-			} : undefined;
-
-			const hasInferenceFilters = !!(jobParams.inferenceIncludeVerses || jobParams.inferenceExcludeVerses);
-			const inferenceConfig = (needsInference && hasInferenceFilters) ? {
-				include_verses: jobParams.inferenceIncludeVerses,
-				exclude_verses: jobParams.inferenceExcludeVerses
-			} : undefined;
-
-			const job = {
-				job_id: jobId,
-				job_type: 'tts' as const,
-				mode: jobParams.mode,
-				submitted_at: new Date().toISOString(),
-				model: {
-					type: jobParams.modelType as 'StableTTS',
-					base_checkpoint: jobParams.baseCheckpoint
-				},
-				epochs: jobParams.epochs,
-				training: trainingConfig,
-				inference: inferenceConfig,
-				voice_reference: jobParams.voiceReference,
-				canceled: false
-			};
-
-			// Add job to manifest
-			await manifestService.addJob(job);
-
-			// Share project with worker
-			await gitLabService.shareProjectWithWorker();
-
-			// Refresh the tree view
-			await jobTreeDataProvider.refresh();
-
-			vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
-
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
 			console.error('New job error:', error);
 		} finally {
-			activeWizardRunning = false;
+			activePanelRunning = false;
+		}
+	});
+
+	// Register view job detail command (triggered by clicking a job in the tree)
+	const viewJobDetailDisposable = vscode.commands.registerCommand('codex-worker.viewJobDetail', async (jobItem: JobTreeItem) => {
+		if (!jobItem || !jobItem.job) {
+			return;
+		}
+
+		// Prevent multiple panels
+		if (activePanelRunning) {
+			vscode.window.showInformationMessage('A job panel is already open.');
+			return;
+		}
+
+		activePanelRunning = true;
+		try {
+			const panel = new JobDetailPanel(
+				manifestService,
+				context.extensionUri
+			);
+
+			const result = await panel.run(jobItem.job);
+
+			// Refresh tree after any action (cancel, delete, etc.)
+			await jobTreeDataProvider.refresh();
+
+			// Handle follow-up actions that need to launch the wizard
+			if (result?.action === 'further-train') {
+				const presets: WizardPresets = {
+					mode: 'training',
+					modelType: result.job.model.type as TTSModelType,
+					baseCheckpoint: result.checkpointPath ?? null,
+					contextLabel: `Further training from ${result.job.job_id}`,
+				};
+
+				const jobId = await runWizardAndCreateJob(presets);
+				if (jobId) {
+					vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+				}
+			} else if (result?.action === 'run-inference') {
+				const presets: WizardPresets = {
+					mode: 'inference',
+					modelType: result.job.model.type as TTSModelType,
+					baseCheckpoint: result.checkpointPath ?? null,
+					contextLabel: `Inference using model from ${result.job.job_id}`,
+				};
+
+				const jobId = await runWizardAndCreateJob(presets);
+				if (jobId) {
+					vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+				}
+			}
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Job detail error: ${errorMessage}`);
+			console.error('View job detail error:', error);
+		} finally {
+			activePanelRunning = false;
 		}
 	});
 
@@ -360,6 +438,7 @@ export function activate(context: vscode.ExtensionContext) {
 		treeView,
 		refreshJobsDisposable,
 		newJobDisposable,
+		viewJobDetailDisposable,
 		cancelJobDisposable
 	);
 }

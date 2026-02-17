@@ -20,6 +20,24 @@ import { ManifestService } from '../services/ManifestService';
 import { WebviewUI } from './WebviewUI';
 
 /**
+ * Optional pre-filled values that skip their corresponding wizard steps.
+ * Used when launching the wizard from a job detail panel (e.g., "Further Train"
+ * or "Run Inference") where some parameters are already known from context.
+ */
+export interface WizardPresets {
+    /** Pre-selected job mode — skips the mode selection step */
+    mode?: JobMode;
+    /** Pre-selected model type — skips the model type selection step */
+    modelType?: TTSModelType;
+    /** Pre-selected base checkpoint — null means "train new", string means specific checkpoint */
+    baseCheckpoint?: string | null;
+    /** Pre-selected voice reference — null means "use default" */
+    voiceReference?: string | null;
+    /** Label shown in the panel title indicating context (e.g., "Further training from job abc123") */
+    contextLabel?: string;
+}
+
+/**
  * Wizard for creating new jobs via a webview panel.
  */
 export class NewJobWizard {
@@ -37,16 +55,22 @@ export class NewJobWizard {
      * Run the job creation wizard.
      * Opens an ephemeral webview panel, walks the user through all steps,
      * and returns the created job parameters or null if canceled.
+     *
+     * @param presets Optional pre-filled values that skip their corresponding steps.
+     *               Used when launching from job detail actions like "Further Train".
      */
-    async run(): Promise<JobCreationParams | null> {
-        const ui = new WebviewUI(this.extensionUri, this.workspaceRoot);
+    async run(presets?: WizardPresets): Promise<JobCreationParams | null> {
+        const panelTitle = presets?.contextLabel
+            ? `GPU Job: ${presets.contextLabel}`
+            : 'New GPU Job';
+        const ui = new WebviewUI(this.extensionUri, this.workspaceRoot, panelTitle);
 
         try {
             let result: JobCreationParams | null = null;
             let done = false;
 
             while (!done) {
-                result = await this.runWizardSteps(ui);
+                result = await this.runWizardSteps(ui, presets);
                 if (!result) {
                     // User canceled at some step
                     break;
@@ -87,50 +111,63 @@ export class NewJobWizard {
     /**
      * Run through all wizard steps sequentially.
      * Returns JobCreationParams if all steps completed, or null if canceled.
+     *
+     * When presets are provided, steps with pre-filled values are skipped
+     * and the preset value is used directly.
      */
-    private async runWizardSteps(ui: WebviewUI): Promise<JobCreationParams | null> {
-        // Step 1: Select job mode
-        const mode = await this.selectMode(ui);
+    private async runWizardSteps(
+        ui: WebviewUI,
+        presets?: WizardPresets
+    ): Promise<JobCreationParams | null> {
+        // Step 1: Select job mode — skip if preset
+        const mode = presets?.mode ?? await this.selectMode(ui);
         if (!mode) { return null; }
 
-        // Step 2: Select model type
-        const modelType = await this.selectModelType(ui);
+        // Step 2: Select model type — skip if preset
+        const modelType = presets?.modelType ?? await this.selectModelType(ui);
         if (!modelType) { return null; }
 
-        // Step 3: Select base checkpoint
+        // Step 3: Select base checkpoint — skip if preset
         let currentMode = mode;
-        const baseCheckpoint = await this.selectBaseCheckpoint(ui, currentMode, modelType);
-        if (baseCheckpoint === undefined) {
-            // For inference-only with no checkpoints, offer to switch
-            if (currentMode === 'inference') {
-                const switchItem = await ui.showQuickPick(
-                    [
-                        { label: 'Train & Infer', description: 'Train a new model first, then run inference' },
-                        { label: 'Cancel', description: 'Go back' },
-                    ],
-                    {
-                        title: 'No Checkpoints Available',
-                        placeHolder: 'No trained model checkpoints found. Would you like to train first?',
+        let baseCheckpoint: string | null | undefined;
+
+        if (presets?.baseCheckpoint !== undefined) {
+            // Preset provided: use it directly (null = train new, string = specific checkpoint)
+            baseCheckpoint = presets.baseCheckpoint;
+        } else {
+            baseCheckpoint = await this.selectBaseCheckpoint(ui, currentMode, modelType);
+            if (baseCheckpoint === undefined) {
+                // For inference-only with no checkpoints, offer to switch
+                if (currentMode === 'inference') {
+                    const switchItem = await ui.showQuickPick(
+                        [
+                            { label: 'Train & Infer', description: 'Train a new model first, then run inference' },
+                            { label: 'Cancel', description: 'Go back' },
+                        ],
+                        {
+                            title: 'No Checkpoints Available',
+                            placeHolder: 'No trained model checkpoints found. Would you like to train first?',
+                        }
+                    );
+                    if (switchItem?.label === 'Train & Infer') {
+                        currentMode = 'training_and_inference';
+                    } else {
+                        return null;
                     }
-                );
-                if (switchItem?.label === 'Train & Infer') {
-                    currentMode = 'training_and_inference';
                 } else {
                     return null;
                 }
-            } else {
-                return null;
             }
         }
 
-        // Step 4: Select epochs (if training)
+        // Step 4: Select epochs (if training) — always ask
         let epochs: number | undefined;
         if (currentMode === 'training' || currentMode === 'training_and_inference') {
             epochs = await this.selectEpochs(ui);
             if (epochs === undefined) { return null; }
         }
 
-        // Step 5: Select verse filters
+        // Step 5: Select verse filters — always ask
         let inferenceIncludeVerses: string[] | undefined;
         let inferenceExcludeVerses: string[] | undefined;
         let trainingIncludeVerses: string[] | undefined;
@@ -158,9 +195,14 @@ export class NewJobWizard {
             inferenceExcludeVerses = selection.exclude;
         }
 
-        // Step 6: Select voice reference
-        const voiceReference = await this.selectVoiceReference(ui);
-        if (voiceReference === undefined) { return null; }
+        // Step 6: Select voice reference — skip if preset
+        let voiceReference: string | null | undefined;
+        if (presets?.voiceReference !== undefined) {
+            voiceReference = presets.voiceReference;
+        } else {
+            voiceReference = await this.selectVoiceReference(ui);
+            if (voiceReference === undefined) { return null; }
+        }
 
         return {
             mode: currentMode,

@@ -437,6 +437,111 @@ button:disabled {
 }
 
 /* ============================================================
+ * Job Detail view
+ * ============================================================ */
+
+.job-detail-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.job-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.job-detail-header h2 {
+    margin-bottom: 0;
+}
+
+.job-detail-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.job-detail-badge-pending {
+    background-color: rgba(255, 204, 0, 0.2);
+    color: #ffcc00;
+}
+
+.job-detail-badge-running {
+    background-color: rgba(0, 120, 212, 0.2);
+    color: var(--vscode-charts-blue, #0078d4);
+}
+
+.job-detail-badge-completed {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #28a745;
+}
+
+.job-detail-badge-failed {
+    background-color: rgba(220, 53, 69, 0.2);
+    color: #dc3545;
+}
+
+.job-detail-badge-canceled {
+    background-color: rgba(128, 128, 128, 0.2);
+    color: var(--vscode-descriptionForeground);
+}
+
+.job-detail-id {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    padding: 4px 0;
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+}
+
+.job-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+}
+
+.job-detail-actions h3 {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 4px;
+}
+
+.job-detail-button-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Warning button (for cancel) */
+.btn-warning {
+    background-color: rgba(255, 204, 0, 0.3);
+    color: var(--vscode-foreground);
+    border: 1px solid rgba(255, 204, 0, 0.5);
+}
+
+.btn-warning:hover {
+    background-color: rgba(255, 204, 0, 0.45);
+}
+
+/* Danger button (for delete) */
+.btn-danger {
+    background-color: rgba(220, 53, 69, 0.3);
+    color: var(--vscode-foreground);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+}
+
+.btn-danger:hover {
+    background-color: rgba(220, 53, 69, 0.45);
+}
+
+/* ============================================================
  * Loading / transition state
  * ============================================================ */
 

@@ -17,6 +17,8 @@ import {
     VerseSelectorOptions,
     VerseSelectionResult,
     ConfirmationPageData,
+    JobDetailData,
+    JobDetailAction,
     WebviewTask,
     WebviewMessage,
 } from '../types/ui';
@@ -35,10 +37,11 @@ export class WebviewUI {
     constructor(
         private extensionUri: vscode.Uri,
         private workspaceRoot?: string,
+        private panelTitle: string = 'New GPU Job',
     ) {
         this.panel = vscode.window.createWebviewPanel(
-            'codexWorkerWizard',
-            'New GPU Job',
+            'codexWorkerPanel',
+            this.panelTitle,
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -246,6 +249,19 @@ export class WebviewUI {
     ): Promise<'submit' | 'start-over' | undefined> {
         return this.askWebview<'submit' | 'start-over'>({
             taskType: 'confirmation',
+            data,
+        });
+    }
+
+    /**
+     * Show the job detail view with action buttons.
+     * Returns the action the user clicked, or undefined if the panel was closed.
+     */
+    async showJobDetail(
+        data: JobDetailData
+    ): Promise<JobDetailAction | undefined> {
+        return this.askWebview<JobDetailAction>({
+            taskType: 'job-detail',
             data,
         });
     }

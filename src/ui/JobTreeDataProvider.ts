@@ -21,6 +21,13 @@ export class JobTreeItem extends vscode.TreeItem {
         this.description = this.buildDescription();
         this.iconPath = this.getIconForState(job.state);
         this.contextValue = this.getContextValue();
+
+        // Click (or double-click, depending on user settings) opens the job detail panel
+        this.command = {
+            command: 'codex-worker.viewJobDetail',
+            title: 'View Job Details',
+            arguments: [this]
+        };
     }
 
     /**
