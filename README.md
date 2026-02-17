@@ -1,71 +1,117 @@
-# codex-worker README
+# Codex Worker
 
-This is the README for your extension "codex-worker". After writing up a brief description, we recommend including the following sections.
+A **VS Code–compatible extension** for **Codex Editor** that enables users to create and manage **GPU-intensive background jobs**, starting with **TTS model training and inference**.
+
+The extension operates by scanning raw project files, generating and updating a **single YAML manifest**, sharing the project with a GitLab-based GPU worker, and tracking job state via filesystem artifacts committed to the repo. The system is intentionally **filesystem- and Git-driven**, with minimal reliance on persistent local state.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Sidebar Panel
 
-For example if there is an image subfolder under your extension project workspace:
+- Dedicated sidebar icon in the Activity Bar for GPU job management
+- Lists all existing jobs with state icons/colors
+- Shows worker name (if claimed), epoch progress, and verse range details
 
-\!\[feature X\]\(images/feature-x.png\)
+### Job Creation Wizard
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- Step-by-step "New Job" dialog flow
+- Confirmation pane before submission showing:
+  - Number of audio/text pairs discovered
+  - Missing recordings
+  - Training vs. inference vs. both
+  - Model selection (new or existing checkpoint)
+  - Epoch count
+  - Inference verse inclusion/exclusion
+- Warnings for concurrent running jobs or insufficient audio
 
-## Requirements
+### Audio & Text Discovery
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Scans `./files/target/**/*.codex` for text and audio references
+- `.codex` files (JSON cells) are the **single source of truth**
+- No heuristic or filesystem fallback
+
+### Manifest Generation
+
+- Generates and maintains `./gpu_jobs/manifest.yaml`
+- Supports multiple jobs in a single manifest
+- Forward-compatible with a version number for future breaking changes
+- Append-only (except for cancel flags or metadata updates)
+
+### Job State Tracking
+
+Job state is detected purely from the filesystem:
+
+| State     | Condition                                  |
+| --------- | ------------------------------------------ |
+| Pending   | No job folder exists                       |
+| Running   | Job folder exists with worker ID           |
+| Completed | `response.yaml` says completed             |
+| Failed    | `response.yaml` says failed                |
+| Canceled  | Manifest canceled + response says canceled |
+
+### GitLab Integration
+
+- Uses a GitLab API token for authentication
+- Shares the project with the GPU worker on job creation
+- Automatically unshares the project on completion or timeout
+
+### Preflight Validation
+
+Before writing the manifest, the extension validates:
+
+- Sufficient audio/text pairs
+- Selected base model exists (if extending)
+- GitLab connectivity and successful project share
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+| Setting                       | Type   | Default | Description                          |
+| ----------------------------- | ------ | ------- | ------------------------------------ |
+| `codex-worker.workerUserId`   | number | 551     | GitLab user ID of the GPU worker     |
 
-For example:
+## Commands
 
-This extension contributes the following settings:
+| Command                                  | Description                        |
+| ---------------------------------------- | ---------------------------------- |
+| **GPU Jobs: Test GitLab Connection**     | Verify GitLab connectivity         |
+| **GPU Jobs: Test Manifest Generation**   | Test manifest creation             |
+| **GPU Jobs: Test Audio Discovery**       | Test audio file discovery          |
+| **New Job**                              | Create a new GPU job               |
+| **Refresh Jobs**                         | Refresh the jobs list              |
+| **Cancel Job**                           | Cancel a running job               |
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Extensibility
 
-## Known Issues
+- The manifest supports multiple job types (TTS now, others later)
+- Multiple TTS model types are supported
+- The UI avoids hard-coded assumptions that would prevent new job types
+- The manifest `version` field allows future breaking changes
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+## Technology
+
+- **Language:** TypeScript
+- **Platform:** VS Code Extension API (Codex Editor compatible)
+- **Manifest format:** YAML
+- **State storage:** Git repository only
+
+## Building
+
+```bash
+# Compile (development)
+npm run compile
+
+# Watch mode
+npm run watch
+
+# Production build
+npm run package
+
+# Create .vsix file
+npm run vsix
+```
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Initial development release with TTS job management, audio discovery, manifest generation, GitLab integration, and preflight validation.
