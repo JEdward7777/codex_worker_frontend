@@ -47,8 +47,7 @@ export class WebviewUI {
                 enableScripts: true,
                 retainContextWhenHidden: true,
                 localResourceRoots: [
-                    vscode.Uri.joinPath(extensionUri, 'src', 'ui', 'webview'),
-                    vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
+                    vscode.Uri.joinPath(extensionUri, 'media'),
                     // Allow access to project attachments for audio playback
                     ...(workspaceRoot ? [vscode.Uri.file(path.join(workspaceRoot, '.project', 'attachments'))] : []),
                 ],
@@ -279,10 +278,10 @@ export class WebviewUI {
 
         // Get URIs for webview resources
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'src', 'ui', 'webview', 'wizard.css')
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'wizard.css')
         );
         const jsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'src', 'ui', 'webview', 'wizard.js')
+            vscode.Uri.joinPath(this.extensionUri, 'media', 'wizard.js')
         );
 
         const nonce = getNonce();
