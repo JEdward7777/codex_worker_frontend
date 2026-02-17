@@ -1126,6 +1126,9 @@
             case 'delete-job': return 'btn-danger';
             case 'further-train': return 'btn-primary';
             case 'run-inference': return 'btn-primary';
+            case 'clone-job': return 'btn-secondary';
+            case 'view-logs': return 'btn-secondary';
+            case 'open-job-folder': return 'btn-secondary';
             default: return 'btn-secondary';
         }
     }
@@ -1141,6 +1144,9 @@
             case 'delete-job': return '🗑 Delete Job';
             case 'further-train': return '🔄 Further Train';
             case 'run-inference': return '🔊 Run Inference';
+            case 'clone-job': return '📋 Clone Job';
+            case 'view-logs': return '📄 View Logs';
+            case 'open-job-folder': return '📂 Open Folder';
             default: return action;
         }
     }
@@ -1156,6 +1162,9 @@
             case 'delete-job': return 'Delete this job and its model files permanently';
             case 'further-train': return 'Create a new training job using this model as a base';
             case 'run-inference': return 'Create a new inference job using this model';
+            case 'clone-job': return 'Re-submit a new job with the same parameters';
+            case 'view-logs': return 'Open the job response file in the editor';
+            case 'open-job-folder': return 'Reveal the job folder in the file explorer';
             default: return '';
         }
     }

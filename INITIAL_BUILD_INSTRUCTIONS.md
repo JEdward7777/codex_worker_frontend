@@ -148,7 +148,16 @@ When claimed, the worker creates:
 ```
 ./gpu_jobs/job_<job_id>/
   response.yaml
+  logs.txt          (optional — worker-produced log output)
+  <model files>     (e.g., model_epoch100.pt — produced by training)
 ```
+
+The plugin checks for the presence of specific files in the job folder:
+
+| File             | Purpose                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `response.yaml`  | Worker state, progress, and result data (see below)                     |
+| `logs.txt`       | Worker log output; plugin offers "View Logs" action when this file exists |
 
 ### Job State Detection (Filesystem-Based)
 
@@ -160,7 +169,7 @@ When claimed, the worker creates:
 | failed    | `response.yaml` says failed                |
 | canceled  | Manifest canceled + response says canceled |
 
-No separate “claimed” vs “running” distinction.
+No separate "claimed" vs "running" distinction.
 
 ---
 
@@ -174,18 +183,44 @@ worker_id: <unique worker ID>
 state: running | completed | failed | canceled
 epochs_completed: <optional int>
 error_message: <optional string>
-timestamp: <optional>
+timestamp: <optional, ISO 8601>
 result:
   checkpoint_path: <optional, path to trained model checkpoint relative to workspace root>
 ```
 
 Worker uses `worker_id` to ensure it still owns the job.
 
+### Fields consumed by the plugin
+
+The plugin reads the following keys from `response.yaml` and surfaces them in the UI:
+
+| Key                      | Plugin Usage                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `worker_id`              | Displayed in job tooltip and detail panel; identifies which worker claimed the job                             |
+| `state`                  | Primary job state indicator; drives sidebar icons, detail panel badge, and available actions                   |
+| `epochs_completed`       | Shown as progress (e.g., "5/100 epochs") in sidebar and detail panel                                         |
+| `error_message`          | Displayed in tooltip and detail panel when state is `failed`                                                  |
+| `timestamp`              | Shown as "Completed" or "Last Update" time; falls back to `response.yaml` file mtime if absent                |
+| `result.checkpoint_path` | Used to discover trained models for fine-tuning and inference (see below)                                     |
+
 ### Result Fields
 
 When a training job completes successfully, the worker populates the `result` object:
 
-* `checkpoint_path`: Path to the trained model file (`.pt`), relative to the workspace root (e.g., `gpu_jobs/job_abc123/model_epoch100.pt`). The plugin uses this field to discover available checkpoints for fine-tuning or inference.
+* `checkpoint_path`: Path to the trained model file (`.pt`), relative to the workspace root (e.g., `gpu_jobs/job_abc123/model_epoch100.pt`). The plugin uses this field to:
+  * **Discover available checkpoints** — listed when the user selects a base model for a new training job
+  * **"Further Train" action** — pre-fills the new job wizard with this checkpoint as the base model
+  * **"Run Inference" action** — pre-fills the new job wizard with this checkpoint for inference
+  * The plugin **verifies the checkpoint file exists on disk** before offering it; missing files are silently excluded
+
+## Worker Log File (`logs.txt`)
+
+* Plain text format
+* Located at `./gpu_jobs/job_<job_id>/logs.txt`
+* Written by the worker during job execution (stdout/stderr capture, progress messages, etc.)
+* The plugin checks for the **existence** of this file to conditionally show a "View Logs" button in the job detail panel
+* When clicked, the file is opened in the editor as a read-only preview
+* This file is **optional** — the plugin functions correctly without it
 
 ---
 

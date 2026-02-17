@@ -34,6 +34,8 @@ export interface JobDetailResult {
  */
 export class JobDetailPanel {
     private workspaceRoot: string;
+    /** The active WebviewUI instance, tracked so it can be disposed externally */
+    private ui: WebviewUI | null = null;
 
     constructor(
         private manifestService: ManifestService,
@@ -43,13 +45,24 @@ export class JobDetailPanel {
     }
 
     /**
+     * Dispose the panel externally. This causes the pending showJobDetail()
+     * promise to resolve to undefined, allowing the run() method to exit cleanly.
+     */
+    dispose(): void {
+        if (this.ui) {
+            this.ui.dispose();
+            this.ui = null;
+        }
+    }
+
+    /**
      * Show the job detail panel and handle the user's action.
      * Returns a JobDetailResult if an action was taken that the caller needs
      * to follow up on (further-train, run-inference), or null if the panel
      * was closed without a follow-up action.
      */
     async run(job: JobWithState): Promise<JobDetailResult | null> {
-        const ui = new WebviewUI(
+        this.ui = new WebviewUI(
             this.extensionUri,
             this.workspaceRoot,
             `Job: ${job.job_id}`
@@ -58,7 +71,7 @@ export class JobDetailPanel {
         try {
             const actions = this.computeAvailableActions(job);
             const detailData = this.buildDetailData(job, actions);
-            const action = await ui.showJobDetail(detailData);
+            const action = await this.ui.showJobDetail(detailData);
 
             if (!action) {
                 // Panel was closed without selecting an action
@@ -73,7 +86,10 @@ export class JobDetailPanel {
             vscode.window.showErrorMessage(`Job detail error: ${errorMessage}`);
             return null;
         } finally {
-            ui.dispose();
+            if (this.ui) {
+                this.ui.dispose();
+                this.ui = null;
+            }
         }
     }
 
@@ -109,6 +125,22 @@ export class JobDetailPanel {
             }
         }
 
+        // Clone Job: available on completed or failed jobs (re-submit with same params)
+        if (job.state === 'completed' || job.state === 'failed' || job.state === 'canceled') {
+            actions.push('clone-job');
+        }
+
+        // Open Job Folder: available when the job folder exists on disk
+        const jobFolderPath = this.getJobFolderPath(job.job_id);
+        if (jobFolderPath && fs.existsSync(jobFolderPath)) {
+            // View Logs: only if logs.txt exists in the job folder
+            const logsPath = path.join(jobFolderPath, 'logs.txt');
+            if (fs.existsSync(logsPath)) {
+                actions.push('view-logs');
+            }
+            actions.push('open-job-folder');
+        }
+
         return actions;
     }
 
@@ -116,6 +148,7 @@ export class JobDetailPanel {
      * Build the detail data payload to send to the webview.
      */
     private buildDetailData(job: JobWithState, availableActions: JobDetailAction[]): JobDetailData {
+        const jobFolderPath = this.getJobFolderPath(job.job_id);
         return {
             jobId: job.job_id,
             jobType: job.job_type,
@@ -133,6 +166,7 @@ export class JobDetailPanel {
             trainingVerseCount: this.countVerses(job.training?.include_verses, job.training?.exclude_verses),
             inferenceVerseCount: this.countVerses(job.inference?.include_verses, job.inference?.exclude_verses),
             voiceReference: job.voice_reference,
+            hasJobFolder: !!(jobFolderPath && fs.existsSync(jobFolderPath)),
             availableActions,
         };
     }
@@ -207,6 +241,42 @@ export class JobDetailPanel {
                 };
             }
 
+            case 'clone-job': {
+                // Return the action so extension.ts can launch the wizard pre-filled
+                // with the same parameters as this job
+                return {
+                    action: 'clone-job',
+                    job,
+                };
+            }
+
+            case 'view-logs': {
+                // Open the logs.txt file in the editor
+                const jobFolderPath = this.getJobFolderPath(job.job_id);
+                if (jobFolderPath) {
+                    const logsPath = path.join(jobFolderPath, 'logs.txt');
+                    if (fs.existsSync(logsPath)) {
+                        const doc = await vscode.workspace.openTextDocument(logsPath);
+                        await vscode.window.showTextDocument(doc, { preview: true });
+                    } else {
+                        vscode.window.showWarningMessage('No logs file found for this job.');
+                    }
+                }
+                return null;
+            }
+
+            case 'open-job-folder': {
+                // Reveal the job folder in the file explorer
+                const jobFolderPath = this.getJobFolderPath(job.job_id);
+                if (jobFolderPath && fs.existsSync(jobFolderPath)) {
+                    const folderUri = vscode.Uri.file(jobFolderPath);
+                    await vscode.commands.executeCommand('revealInExplorer', folderUri);
+                } else {
+                    vscode.window.showWarningMessage('Job folder not found on disk.');
+                }
+                return null;
+            }
+
             default:
                 return null;
         }
@@ -225,6 +295,17 @@ export class JobDetailPanel {
             return job.model.base_checkpoint ?? null;
         }
         return null;
+    }
+
+    /**
+     * Get the absolute path to a job's folder on disk.
+     * Returns null if no workspace root is available.
+     */
+    private getJobFolderPath(jobId: string): string | null {
+        if (!this.workspaceRoot) {
+            return null;
+        }
+        return path.join(this.workspaceRoot, 'gpu_jobs', `job_${jobId}`);
     }
 
     /**

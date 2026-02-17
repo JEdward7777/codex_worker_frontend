@@ -164,7 +164,10 @@ export type JobDetailAction =
     | 'cancel-job'
     | 'delete-job'
     | 'further-train'
-    | 'run-inference';
+    | 'run-inference'
+    | 'clone-job'
+    | 'view-logs'
+    | 'open-job-folder';
 
 /**
  * Data sent to the job detail view for rendering
@@ -186,6 +189,8 @@ export interface JobDetailData {
     trainingVerseCount?: number;
     inferenceVerseCount?: number;
     voiceReference?: string;
+    /** Whether the job folder exists on disk (for view-logs / open-folder actions) */
+    hasJobFolder: boolean;
     /** Which actions are valid for this job's current state */
     availableActions: JobDetailAction[];
 }

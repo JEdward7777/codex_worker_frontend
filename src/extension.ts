@@ -9,7 +9,7 @@ import { JobTreeDataProvider, JobTreeItem } from './ui/JobTreeDataProvider';
 import { NewJobWizard, WizardPresets } from './ui/NewJobWizard';
 import { JobDetailPanel } from './ui/JobDetailPanel';
 import { JobCreationParams } from './types/ui';
-import { TTSModelType } from './types/manifest';
+import { TTSModelType, JobMode } from './types/manifest';
 
 // Global service instances
 let gitLabService: GitLabService;
@@ -18,8 +18,13 @@ let audioDiscoveryService: AudioDiscoveryService;
 let preflightService: PreflightService;
 let jobTreeDataProvider: JobTreeDataProvider;
 
-// Track active panel (wizard or detail) to prevent multiple panels
-let activePanelRunning = false;
+// Track active panels to manage concurrency.
+// - wizardRunning: true when a multi-step wizard is open (cannot be interrupted)
+// - activeDetailPanel: reference to the current detail panel's WebviewUI so it
+//   can be disposed (which resolves its pending promise to undefined) when the
+//   user clicks a different job
+let wizardRunning = false;
+let activeDetailPanel: JobDetailPanel | null = null;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -313,13 +318,19 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register new job command
 	const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
-		// Prevent multiple panels
-		if (activePanelRunning) {
-			vscode.window.showInformationMessage('A job panel is already open.');
+		// If a detail panel is open, close it (resolves its promise to undefined)
+		if (activeDetailPanel) {
+			activeDetailPanel.dispose();
+			activeDetailPanel = null;
+		}
+
+		// Prevent opening a wizard while another wizard is running
+		if (wizardRunning) {
+			vscode.window.showInformationMessage('A job wizard is already open.');
 			return;
 		}
 
-		activePanelRunning = true;
+		wizardRunning = true;
 		try {
 			const jobId = await runWizardAndCreateJob();
 			if (jobId) {
@@ -330,7 +341,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
 			console.error('New job error:', error);
 		} finally {
-			activePanelRunning = false;
+			wizardRunning = false;
 		}
 	});
 
@@ -340,48 +351,101 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		// Prevent multiple panels
-		if (activePanelRunning) {
-			vscode.window.showInformationMessage('A job panel is already open.');
+		// If a wizard is running, don't interrupt it
+		if (wizardRunning) {
+			vscode.window.showInformationMessage('Please close the job wizard first.');
 			return;
 		}
 
-		activePanelRunning = true;
-		try {
-			const panel = new JobDetailPanel(
-				manifestService,
-				context.extensionUri
-			);
+		// If a detail panel is already open, dispose it so it resolves to undefined
+		// and the previous viewJobDetail call exits cleanly. This allows clicking
+		// a different job to replace the current detail panel.
+		if (activeDetailPanel) {
+			activeDetailPanel.dispose();
+			activeDetailPanel = null;
+			// Small delay to let the previous async handler finish its finally block
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
 
+		const panel = new JobDetailPanel(
+			manifestService,
+			context.extensionUri
+		);
+
+		// Track this panel so it can be disposed if the user clicks another job
+		activeDetailPanel = panel;
+
+		try {
 			const result = await panel.run(jobItem.job);
+
+			// If this panel was replaced by another (disposed externally),
+			// result will be null and we should just exit quietly
+			if (!result && activeDetailPanel !== panel) {
+				return;
+			}
+
+			// Clear the active panel reference
+			if (activeDetailPanel === panel) {
+				activeDetailPanel = null;
+			}
 
 			// Refresh tree after any action (cancel, delete, etc.)
 			await jobTreeDataProvider.refresh();
 
 			// Handle follow-up actions that need to launch the wizard
 			if (result?.action === 'further-train') {
-				const presets: WizardPresets = {
-					mode: 'training',
-					modelType: result.job.model.type as TTSModelType,
-					baseCheckpoint: result.checkpointPath ?? null,
-					contextLabel: `Further training from ${result.job.job_id}`,
-				};
+				wizardRunning = true;
+				try {
+					const presets: WizardPresets = {
+						mode: 'training',
+						modelType: result.job.model.type as TTSModelType,
+						baseCheckpoint: result.checkpointPath ?? null,
+						contextLabel: `Further training from ${result.job.job_id}`,
+					};
 
-				const jobId = await runWizardAndCreateJob(presets);
-				if (jobId) {
-					vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+					const jobId = await runWizardAndCreateJob(presets);
+					if (jobId) {
+						vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+					}
+				} finally {
+					wizardRunning = false;
 				}
 			} else if (result?.action === 'run-inference') {
-				const presets: WizardPresets = {
-					mode: 'inference',
-					modelType: result.job.model.type as TTSModelType,
-					baseCheckpoint: result.checkpointPath ?? null,
-					contextLabel: `Inference using model from ${result.job.job_id}`,
-				};
+				wizardRunning = true;
+				try {
+					const presets: WizardPresets = {
+						mode: 'inference',
+						modelType: result.job.model.type as TTSModelType,
+						baseCheckpoint: result.checkpointPath ?? null,
+						contextLabel: `Inference using model from ${result.job.job_id}`,
+					};
 
-				const jobId = await runWizardAndCreateJob(presets);
-				if (jobId) {
-					vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+					const jobId = await runWizardAndCreateJob(presets);
+					if (jobId) {
+						vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+					}
+				} finally {
+					wizardRunning = false;
+				}
+			} else if (result?.action === 'clone-job') {
+				wizardRunning = true;
+				try {
+					// Clone: pre-fill with the same mode, model type, checkpoint, and voice reference
+					const job = result.job;
+					const presets: WizardPresets = {
+						mode: job.mode as JobMode,
+						modelType: job.model.type as TTSModelType,
+						baseCheckpoint: job.model.base_checkpoint ?? null,
+						voiceReference: job.voice_reference ?? null,
+						contextLabel: `Clone of ${job.job_id}`,
+					};
+
+					const jobId = await runWizardAndCreateJob(presets);
+					if (jobId) {
+						vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+					}
+				} finally {
+					wizardRunning = false;
 				}
 			}
 
@@ -390,7 +454,10 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage(`Job detail error: ${errorMessage}`);
 			console.error('View job detail error:', error);
 		} finally {
-			activePanelRunning = false;
+			// Clean up if this panel is still the active one
+			if (activeDetailPanel === panel) {
+				activeDetailPanel = null;
+			}
 		}
 	});
 
