@@ -226,6 +226,7 @@ export class ManifestService {
         worker_id?: string;
         epochs_completed?: number;
         error_message?: string;
+        response_timestamp?: string;
     } {
         const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
         const responsePath = path.join(jobFolder, 'response.yaml');
@@ -246,11 +247,23 @@ export class ManifestService {
             const responseContent = fs.readFileSync(responsePath, 'utf8');
             const response = yaml.load(responseContent) as WorkerResponse;
 
+            // Use response timestamp if available, otherwise fall back to file mtime
+            let responseTimestamp = response.timestamp;
+            if (!responseTimestamp) {
+                try {
+                    const stat = fs.statSync(responsePath);
+                    responseTimestamp = stat.mtime.toISOString();
+                } catch {
+                    // Ignore stat errors
+                }
+            }
+
             return {
                 state: response.state,
                 worker_id: response.worker_id,
                 epochs_completed: response.epochs_completed,
-                error_message: response.error_message
+                error_message: response.error_message,
+                response_timestamp: responseTimestamp
             };
         } catch (error) {
             // If we can't read the response, assume running

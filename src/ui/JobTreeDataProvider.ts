@@ -23,6 +23,17 @@ export class JobTreeItem extends vscode.TreeItem {
         this.contextValue = this.getContextValue();
     }
 
+    /**
+     * Format an ISO 8601 timestamp into a human-readable local date/time string.
+     */
+    private static formatTimestamp(iso: string): string {
+        const date = new Date(iso);
+        if (isNaN(date.getTime())) {
+            return iso; // Return raw value if unparseable
+        }
+        return date.toLocaleString();
+    }
+
     private buildTooltip(): string {
         const lines: string[] = [
             `Job ID: ${this.job.job_id}`,
@@ -34,6 +45,19 @@ export class JobTreeItem extends vscode.TreeItem {
 
         if (this.job.model.base_checkpoint) {
             lines.push(`Base: ${this.job.model.base_checkpoint}`);
+        }
+
+        // Show submitted_at if available
+        if (this.job.submitted_at) {
+            lines.push(`Submitted: ${JobTreeItem.formatTimestamp(this.job.submitted_at)}`);
+        }
+
+        // Show response timestamp — label depends on job state
+        if (this.job.response_timestamp) {
+            const label = (this.job.state === 'completed' || this.job.state === 'failed' || this.job.state === 'canceled')
+                ? 'Completed'
+                : 'Last Update';
+            lines.push(`${label}: ${JobTreeItem.formatTimestamp(this.job.response_timestamp)}`);
         }
 
         if (this.job.epochs) {

@@ -94,6 +94,7 @@ export interface JobWithState extends Job {
     worker_id?: string;
     epochs_completed?: number;
     error_message?: string;
+    response_timestamp?: string; // ISO 8601 timestamp from the worker response file
 }
 
 /**
