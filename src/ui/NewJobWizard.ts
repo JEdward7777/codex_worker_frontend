@@ -195,13 +195,15 @@ export class NewJobWizard {
             inferenceExcludeVerses = selection.exclude;
         }
 
-        // Step 6: Select voice reference — skip if preset
+        // Step 6: Select voice reference — only for inference modes, skip if preset
         let voiceReference: string | null | undefined;
-        if (presets?.voiceReference !== undefined) {
-            voiceReference = presets.voiceReference;
-        } else {
-            voiceReference = await this.selectVoiceReference(ui);
-            if (voiceReference === undefined) { return null; }
+        if (currentMode === 'inference' || currentMode === 'training_and_inference') {
+            if (presets?.voiceReference !== undefined) {
+                voiceReference = presets.voiceReference;
+            } else {
+                voiceReference = await this.selectVoiceReference(ui);
+                if (voiceReference === undefined) { return null; }
+            }
         }
 
         return {
