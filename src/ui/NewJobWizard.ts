@@ -446,7 +446,14 @@ export class NewJobWizard {
 
         // Discover all verses for the selector
         const summary = await this.audioDiscoveryService.discoverAudio();
-        const verseSelectorItems: VerseSelectorItem[] = summary.verses.map(v => ({
+
+        // For training, only show cells that have audio — cells without audio
+        // are irrelevant for training and just clutter the selector.
+        const relevantVerses = phase === 'Training'
+            ? summary.verses.filter(v => v.hasAudio)
+            : summary.verses;
+
+        const verseSelectorItems: VerseSelectorItem[] = relevantVerses.map(v => ({
             cellId: v.cellId,
             displayRef: v.verseRef || v.cellId,
             hasAudio: v.hasAudio,
