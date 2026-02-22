@@ -206,7 +206,21 @@ export class NewJobWizard {
             }
         }
 
+        // Step 7: Enter optional job name
+        const jobName = await this.enterJobName(ui);
+        if (jobName === undefined) { return null; } // canceled
+
+        // Step 8: Enter optional job description
+        let jobDescription: string | null | undefined = null;
+        if (jobName) {
+            // Only ask for description if a name was provided
+            jobDescription = await this.enterJobDescription(ui);
+            if (jobDescription === undefined) { return null; } // canceled
+        }
+
         return {
+            name: jobName || undefined,
+            description: jobDescription || undefined,
             mode: currentMode,
             modelType,
             baseCheckpoint: baseCheckpoint || undefined,
@@ -358,9 +372,14 @@ export class NewJobWizard {
                 parts.push('filtered');
             }
 
+            // Use job name as label if available, otherwise fall back to job ID
+            const label = cp.jobName || cp.jobId;
+            // If we have a name, show the job ID in the description for reference
+            const descParts = cp.jobName ? [cp.jobId, ...parts] : parts;
+
             return {
-                label: cp.jobId,
-                description: parts.join(' • '),
+                label,
+                description: descParts.join(' • '),
                 detail: cp.checkpointPath,
             };
         });
@@ -537,6 +556,44 @@ export class NewJobWizard {
         return selectedPath; // Returns pointer path, null (skipped), or undefined (canceled)
     }
 
+    /**
+     * Step 7: Enter optional job name
+     * Returns: name string, null (skipped), or undefined (canceled)
+     */
+    private async enterJobName(ui: WebviewUI): Promise<string | null | undefined> {
+        const name = await ui.showInputBox({
+            title: 'Job Name (Optional)',
+            prompt: 'Give this job a name to identify it easily, or leave blank to skip',
+            value: '',
+            placeHolder: 'e.g., "Genesis Training Run 1"',
+        });
+
+        // undefined means the panel was closed / canceled
+        if (name === undefined) { return undefined; }
+
+        // Empty string means the user skipped
+        return name.trim() || null;
+    }
+
+    /**
+     * Step 8: Enter optional job description
+     * Returns: description string, null (skipped), or undefined (canceled)
+     */
+    private async enterJobDescription(ui: WebviewUI): Promise<string | null | undefined> {
+        const description = await ui.showInputBox({
+            title: 'Job Description (Optional)',
+            prompt: 'Add a description for this job, or leave blank to skip',
+            value: '',
+            placeHolder: 'e.g., "Training on Genesis chapters 1-3 with default voice"',
+        });
+
+        // undefined means the panel was closed / canceled
+        if (description === undefined) { return undefined; }
+
+        // Empty string means the user skipped
+        return description.trim() || null;
+    }
+
     // ================================================================
     // Preflight & confirmation helpers
     // ================================================================
@@ -631,6 +688,8 @@ export class NewJobWizard {
         totalVerses: number
     ): ConfirmationPageData {
         const data: ConfirmationPageData = {
+            name: params.name,
+            description: params.description,
             mode: params.mode,
             modelType: params.modelType,
             baseCheckpoint: params.baseCheckpoint,

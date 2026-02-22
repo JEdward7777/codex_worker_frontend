@@ -242,7 +242,9 @@
                 errorEl.style.display = 'block';
                 return false;
             }
-            if (!value || value.trim().length === 0) {
+            // Only require non-empty when a validation regex is set
+            // (optional fields like name/description have no regex)
+            if (validationRegex && (!value || value.trim().length === 0)) {
                 errorEl.textContent = 'Please enter a value';
                 errorEl.style.display = 'block';
                 return false;
@@ -781,6 +783,22 @@
         subtitle.textContent = 'Review your job configuration before submitting.';
         container.appendChild(subtitle);
 
+        // Job name and description (if provided)
+        if (data.name) {
+            const nameSection = document.createElement('div');
+            nameSection.className = 'confirmation-section';
+            const nameTitle = document.createElement('h3');
+            nameTitle.textContent = 'Job Identity';
+            nameSection.appendChild(nameTitle);
+
+            addRow(nameSection, 'Name', data.name);
+            if (data.description) {
+                addRow(nameSection, 'Description', data.description);
+            }
+
+            container.appendChild(nameSection);
+        }
+
         // Job configuration section
         const configSection = document.createElement('div');
         configSection.className = 'confirmation-section';
@@ -937,11 +955,27 @@
 
         container.appendChild(header);
 
+        // Job name (if available, show prominently)
+        if (data.name) {
+            const nameRow = document.createElement('div');
+            nameRow.className = 'job-detail-name';
+            nameRow.textContent = data.name;
+            container.appendChild(nameRow);
+        }
+
         // Job ID
         const jobIdRow = document.createElement('div');
         jobIdRow.className = 'job-detail-id';
         jobIdRow.textContent = data.jobId;
         container.appendChild(jobIdRow);
+
+        // Description (if available)
+        if (data.description) {
+            const descRow = document.createElement('div');
+            descRow.className = 'job-detail-description';
+            descRow.textContent = data.description;
+            container.appendChild(descRow);
+        }
 
         // Configuration section
         const configSection = document.createElement('div');

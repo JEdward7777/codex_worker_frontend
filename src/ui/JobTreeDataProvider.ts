@@ -15,7 +15,8 @@ export class JobTreeItem extends vscode.TreeItem {
         public readonly job: JobWithState,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
-        super(job.job_id, collapsibleState);
+        // Use job name if available, otherwise fall back to job_id
+        super(job.name || job.job_id, collapsibleState);
 
         this.tooltip = this.buildTooltip();
         this.description = this.buildDescription();
@@ -42,13 +43,22 @@ export class JobTreeItem extends vscode.TreeItem {
     }
 
     private buildTooltip(): string {
-        const lines: string[] = [
+        const lines: string[] = [];
+
+        if (this.job.name) {
+            lines.push(`Name: ${this.job.name}`);
+        }
+        if (this.job.description) {
+            lines.push(`Description: ${this.job.description}`);
+        }
+
+        lines.push(
             `Job ID: ${this.job.job_id}`,
             `Type: ${this.job.job_type}`,
             `Mode: ${this.job.mode}`,
             `State: ${this.job.state}`,
             `Model: ${this.job.model.type}`
-        ];
+        );
 
         if (this.job.model.base_checkpoint) {
             lines.push(`Base: ${this.job.model.base_checkpoint}`);

@@ -490,12 +490,27 @@ button:disabled {
     color: var(--vscode-descriptionForeground);
 }
 
+.job-detail-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    padding: 2px 0;
+}
+
 .job-detail-id {
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.9em;
     color: var(--vscode-descriptionForeground);
     padding: 4px 0;
     border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+}
+
+.job-detail-description {
+    font-size: 0.95em;
+    color: var(--vscode-descriptionForeground);
+    padding: 4px 0 8px 0;
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    font-style: italic;
 }
 
 .job-detail-actions {

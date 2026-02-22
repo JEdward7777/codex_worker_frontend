@@ -113,6 +113,8 @@ No heuristic or filesystem fallback is allowed.
 version: 1
 jobs:
   - job_id: <random unique ID>
+    name: <optional human-readable name>
+    description: <optional description of the job's purpose>
     job_type: tts
     mode: training | inference | training_and_inference
     submitted_at: <ISO 8601 timestamp>

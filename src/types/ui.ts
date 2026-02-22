@@ -9,6 +9,8 @@ import { JobState } from './manifest';
  */
 export interface JobDisplayInfo {
     jobId: string;
+    name?: string;
+    description?: string;
     jobType: string;
     mode: string;
     state: JobState;
@@ -25,6 +27,8 @@ export interface JobDisplayInfo {
  * Job creation parameters from the UI wizard
  */
 export interface JobCreationParams {
+    name?: string;
+    description?: string;
     mode: 'training' | 'inference' | 'training_and_inference';
     modelType: string;
     baseCheckpoint?: string;
@@ -128,6 +132,8 @@ export interface VerseSelectionResult {
  * Data sent to the confirmation page
  */
 export interface ConfirmationPageData {
+    name?: string;
+    description?: string;
     mode: string;
     modelType: string;
     baseCheckpoint?: string;
@@ -174,6 +180,8 @@ export type JobDetailAction =
  */
 export interface JobDetailData {
     jobId: string;
+    name?: string;
+    description?: string;
     jobType: string;
     mode: string;
     state: JobState;

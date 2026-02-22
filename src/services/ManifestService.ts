@@ -473,6 +473,7 @@ export class ManifestService {
 
                 checkpoints.push({
                     jobId: job.job_id,
+                    jobName: job.name,
                     checkpointPath,
                     modelType: job.model.type,
                     epochs: job.epochs,

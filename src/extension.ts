@@ -271,6 +271,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const job = {
 			job_id: jobId,
+			name: jobParams.name,
+			description: jobParams.description,
 			job_type: 'tts' as const,
 			mode: jobParams.mode,
 			submitted_at: new Date().toISOString(),
@@ -396,12 +398,13 @@ export function activate(context: vscode.ExtensionContext) {
 			if (result?.action === 'further-train') {
 				wizardRunning = true;
 				try {
-					const presets: WizardPresets = {
-						mode: 'training',
-						modelType: result.job.model.type as TTSModelType,
-						baseCheckpoint: result.checkpointPath ?? null,
-						contextLabel: `Further training from ${result.job.job_id}`,
-					};
+					const jobLabel = result.job.name || result.job.job_id;
+						const presets: WizardPresets = {
+							mode: 'training',
+							modelType: result.job.model.type as TTSModelType,
+							baseCheckpoint: result.checkpointPath ?? null,
+							contextLabel: `Further training from ${jobLabel}`,
+						};
 
 					const jobId = await runWizardAndCreateJob(presets);
 					if (jobId) {
@@ -413,12 +416,13 @@ export function activate(context: vscode.ExtensionContext) {
 			} else if (result?.action === 'run-inference') {
 				wizardRunning = true;
 				try {
-					const presets: WizardPresets = {
-						mode: 'inference',
-						modelType: result.job.model.type as TTSModelType,
-						baseCheckpoint: result.checkpointPath ?? null,
-						contextLabel: `Inference using model from ${result.job.job_id}`,
-					};
+					const jobLabel = result.job.name || result.job.job_id;
+						const presets: WizardPresets = {
+							mode: 'inference',
+							modelType: result.job.model.type as TTSModelType,
+							baseCheckpoint: result.checkpointPath ?? null,
+							contextLabel: `Inference using model from ${jobLabel}`,
+						};
 
 					const jobId = await runWizardAndCreateJob(presets);
 					if (jobId) {
@@ -432,13 +436,14 @@ export function activate(context: vscode.ExtensionContext) {
 				try {
 					// Clone: pre-fill with the same mode, model type, checkpoint, and voice reference
 					const job = result.job;
-					const presets: WizardPresets = {
-						mode: job.mode as JobMode,
-						modelType: job.model.type as TTSModelType,
-						baseCheckpoint: job.model.base_checkpoint ?? null,
-						voiceReference: job.voice_reference ?? null,
-						contextLabel: `Clone of ${job.job_id}`,
-					};
+						const jobLabel = job.name || job.job_id;
+						const presets: WizardPresets = {
+							mode: job.mode as JobMode,
+							modelType: job.model.type as TTSModelType,
+							baseCheckpoint: job.model.base_checkpoint ?? null,
+							voiceReference: job.voice_reference ?? null,
+							contextLabel: `Clone of ${jobLabel}`,
+						};
 
 					const jobId = await runWizardAndCreateJob(presets);
 					if (jobId) {

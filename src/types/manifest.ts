@@ -47,6 +47,8 @@ export interface InferenceConfig {
  */
 export interface Job {
     job_id: string; // Random unique ID
+    name?: string; // Optional human-readable name for the job
+    description?: string; // Optional description of the job's purpose
     job_type: 'tts'; // Extensible for future job types
     mode: JobMode;
     submitted_at: string; // ISO 8601 timestamp of when the job was defined
@@ -102,6 +104,7 @@ export interface JobWithState extends Job {
  */
 export interface CheckpointInfo {
     jobId: string;
+    jobName?: string; // Human-readable name of the job that produced this checkpoint
     checkpointPath: string; // Relative to workspace root
     modelType: string;
     epochs?: number; // Requested epoch count from manifest

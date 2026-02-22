@@ -62,10 +62,11 @@ export class JobDetailPanel {
      * was closed without a follow-up action.
      */
     async run(job: JobWithState): Promise<JobDetailResult | null> {
+        const panelLabel = job.name || job.job_id;
         this.ui = new WebviewUI(
             this.extensionUri,
             this.workspaceRoot,
-            `Job: ${job.job_id}`
+            `Job: ${panelLabel}`
         );
 
         try {
@@ -151,6 +152,8 @@ export class JobDetailPanel {
         const jobFolderPath = this.getJobFolderPath(job.job_id);
         return {
             jobId: job.job_id,
+            name: job.name,
+            description: job.description,
             jobType: job.job_type,
             mode: job.mode,
             state: job.state,
