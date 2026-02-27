@@ -1569,6 +1569,53 @@
             }
         }
 
+        // Best validation loss marker (★) — shown when val_total_loss is visible
+        if (visibleColumns.indexOf('val_total_loss') !== -1) {
+            const valData = metrics.series['val_total_loss'];
+            if (valData) {
+                let bestIdx = -1;
+                let bestVal = Infinity;
+                for (let i = 0; i < epochs.length && i < valData.length; i++) {
+                    if (!isNaN(valData[i]) && valData[i] < bestVal) {
+                        bestVal = valData[i];
+                        bestIdx = i;
+                    }
+                }
+                if (bestIdx >= 0) {
+                    const starX = scaleX(epochs[bestIdx]);
+                    const starY = scaleY(bestVal);
+                    // Use gold color for the star so it stands out from the orange val_total_loss line
+                    const starColor = '#ffd700';
+
+                    // Star marker
+                    const star = document.createElementNS(svgNS, 'text');
+                    star.setAttribute('x', String(starX));
+                    star.setAttribute('y', String(starY + 2));
+                    star.setAttribute('text-anchor', 'middle');
+                    star.setAttribute('dominant-baseline', 'middle');
+                    star.setAttribute('font-size', '18');
+                    star.setAttribute('fill', starColor);
+                    star.classList.add('training-metrics-best-star');
+                    star.textContent = '★';
+                    svg.appendChild(star);
+
+                    // Annotation label: "Best: X.XXXX (epoch N)"
+                    const annotationText = 'Best: ' + bestVal.toFixed(4) + ' (epoch ' + Math.round(epochs[bestIdx]) + ')';
+                    const annotation = document.createElementNS(svgNS, 'text');
+                    // Position label to the right of the star, or left if near the right edge
+                    const labelOnRight = starX < (margin.left + plotWidth * 0.7);
+                    annotation.setAttribute('x', String(labelOnRight ? starX + 14 : starX - 14));
+                    annotation.setAttribute('y', String(starY - 8));
+                    annotation.setAttribute('text-anchor', labelOnRight ? 'start' : 'end');
+                    annotation.setAttribute('font-size', '11');
+                    annotation.setAttribute('fill', starColor);
+                    annotation.classList.add('training-metrics-best-label');
+                    annotation.textContent = annotationText;
+                    svg.appendChild(annotation);
+                }
+            }
+        }
+
         // Tooltip overlay — invisible rect to capture mouse events
         const overlay = document.createElementNS(svgNS, 'rect');
         overlay.setAttribute('x', String(margin.left));

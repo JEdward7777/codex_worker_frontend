@@ -628,6 +628,18 @@ button:disabled {
     font-weight: 500;
 }
 
+/* Best validation loss star marker */
+.training-metrics-best-star {
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+    pointer-events: none;
+}
+
+.training-metrics-best-label {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-weight: 500;
+    pointer-events: none;
+}
+
 /* Tooltip vertical line */
 .training-metrics-tooltip-line {
     stroke: var(--vscode-editor-foreground, #cccccc);
