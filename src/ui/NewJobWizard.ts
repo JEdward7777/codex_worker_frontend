@@ -18,6 +18,7 @@ import { JobMode, TTSModelType } from '../types/manifest';
 import { AudioDiscoveryService } from '../services/AudioDiscoveryService';
 import { ManifestService } from '../services/ManifestService';
 import { WebviewUI } from './WebviewUI';
+import { PRIVACY_POLICY_VERSION, PRIVACY_CONSENT_KEY, PRIVACY_SUMMARY } from '../constants/privacy';
 
 /**
  * Optional pre-filled values that skip their corresponding wizard steps.
@@ -47,6 +48,7 @@ export class NewJobWizard {
         private audioDiscoveryService: AudioDiscoveryService,
         private manifestService: ManifestService,
         private extensionUri: vscode.Uri,
+        private globalState?: vscode.Memento,
     ) {
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     }
@@ -79,15 +81,28 @@ export class NewJobWizard {
                 // Run preflight checks
                 const preflightResult = await this.runPreflightChecks(result);
 
-                // Build confirmation data
+                // Build confirmation data (with privacy info)
                 const totalVerses = await this.getTotalVerseCount();
                 const confirmData = this.buildConfirmationData(result, preflightResult, totalVerses);
+
+                // Add privacy consent state
+                confirmData.privacySummary = PRIVACY_SUMMARY;
+                const consentedVersion = this.globalState?.get<number>(PRIVACY_CONSENT_KEY);
+                confirmData.privacyPreviouslyConsented = consentedVersion === PRIVACY_POLICY_VERSION;
 
                 // Show confirmation
                 const confirmAction = await ui.showConfirmation(confirmData);
 
                 if (confirmAction === 'submit') {
+                    // Persist privacy consent if not already stored
+                    if (!confirmData.privacyPreviouslyConsented && this.globalState) {
+                        await this.globalState.update(PRIVACY_CONSENT_KEY, PRIVACY_POLICY_VERSION);
+                    }
                     done = true;
+                } else if (confirmAction === 'view-privacy') {
+                    // Open the full privacy policy and loop back to confirmation
+                    await vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
+                    continue;
                 } else if (confirmAction === 'start-over') {
                     // Loop continues — restart wizard
                     result = null;

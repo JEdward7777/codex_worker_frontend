@@ -307,7 +307,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const wizard = new NewJobWizard(
 			audioDiscoveryService,
 			manifestService,
-			context.extensionUri
+			context.extensionUri,
+			context.globalState
 		);
 
 		const jobParams = await wizard.run(presets);
@@ -501,6 +502,18 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register privacy policy command — opens PRIVACY.md in the built-in Markdown preview
+	const viewPrivacyPolicyDisposable = vscode.commands.registerCommand('codex-worker.viewPrivacyPolicy', async () => {
+		const privacyUri = vscode.Uri.joinPath(context.extensionUri, 'PRIVACY.md');
+		try {
+			await vscode.commands.executeCommand('markdown.showPreview', privacyUri);
+		} catch {
+			// Fallback: open as a plain text file if Markdown preview is unavailable
+			const doc = await vscode.workspace.openTextDocument(privacyUri);
+			await vscode.window.showTextDocument(doc, { preview: true });
+		}
+	});
+
 	context.subscriptions.push(
 		helloWorldDisposable,
 		testGitLabDisposable,
@@ -511,7 +524,8 @@ export function activate(context: vscode.ExtensionContext) {
 		refreshJobsDisposable,
 		newJobDisposable,
 		viewJobDetailDisposable,
-		cancelJobDisposable
+		cancelJobDisposable,
+		viewPrivacyPolicyDisposable
 	);
 }
 

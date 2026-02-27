@@ -241,12 +241,12 @@ export class WebviewUI {
 
     /**
      * Show the confirmation/review page.
-     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     * Returns 'submit', 'start-over', 'view-privacy', or undefined (canceled/closed).
      */
     async showConfirmation(
         data: ConfirmationPageData
-    ): Promise<'submit' | 'start-over' | undefined> {
-        return this.askWebview<'submit' | 'start-over'>({
+    ): Promise<'submit' | 'start-over' | 'view-privacy' | undefined> {
+        return this.askWebview<'submit' | 'start-over' | 'view-privacy'>({
             taskType: 'confirmation',
             data,
         });

@@ -899,6 +899,53 @@
             }
         }
 
+        // Privacy notice section
+        const hasErrors = data.errors && data.errors.length > 0;
+        const needsConsent = !data.privacyPreviouslyConsented;
+        let privacyCheckbox = null;
+
+        if (data.privacySummary) {
+            const privacySection = document.createElement('div');
+            privacySection.className = 'privacy-notice';
+
+            const privacyHeader = document.createElement('div');
+            privacyHeader.className = 'privacy-notice-header';
+            privacyHeader.textContent = '🛡️ Data Privacy Notice';
+            privacySection.appendChild(privacyHeader);
+
+            const privacyText = document.createElement('div');
+            privacyText.className = 'privacy-notice-text';
+            privacyText.textContent = data.privacySummary;
+            privacySection.appendChild(privacyText);
+
+            // "View full privacy policy" link
+            const privacyLink = document.createElement('button');
+            privacyLink.className = 'privacy-notice-link';
+            privacyLink.textContent = 'View full privacy policy';
+            privacyLink.addEventListener('click', () => {
+                respond('view-privacy');
+            });
+            privacySection.appendChild(privacyLink);
+
+            // Consent checkbox (only if not previously consented)
+            if (needsConsent) {
+                const consentRow = document.createElement('label');
+                consentRow.className = 'privacy-consent-label';
+
+                privacyCheckbox = document.createElement('input');
+                privacyCheckbox.type = 'checkbox';
+                privacyCheckbox.className = 'privacy-consent-checkbox';
+                consentRow.appendChild(privacyCheckbox);
+
+                const consentText = document.createTextNode(' I understand and consent to the data handling described above');
+                consentRow.appendChild(consentText);
+
+                privacySection.appendChild(consentRow);
+            }
+
+            container.appendChild(privacySection);
+        }
+
         // Buttons
         const buttonRow = document.createElement('div');
         buttonRow.className = 'button-row';
@@ -912,10 +959,19 @@
         buttonRow.appendChild(startOverBtn);
 
         // Only show submit if no errors
-        if (!data.errors || data.errors.length === 0) {
+        if (!hasErrors) {
             const submitBtn = document.createElement('button');
             submitBtn.className = 'btn-primary';
             submitBtn.textContent = 'Submit Job';
+
+            // Disable submit until consent is given (if consent is required)
+            if (needsConsent && privacyCheckbox) {
+                submitBtn.disabled = true;
+                privacyCheckbox.addEventListener('change', () => {
+                    submitBtn.disabled = !privacyCheckbox.checked;
+                });
+            }
+
             submitBtn.addEventListener('click', () => {
                 respond('submit');
             });
@@ -1598,20 +1654,6 @@
                     star.classList.add('training-metrics-best-star');
                     star.textContent = '★';
                     svg.appendChild(star);
-
-                    // Annotation label: "Best: X.XXXX (epoch N)"
-                    const annotationText = 'Best: ' + bestVal.toFixed(4) + ' (epoch ' + Math.round(epochs[bestIdx]) + ')';
-                    const annotation = document.createElementNS(svgNS, 'text');
-                    // Position label to the right of the star, or left if near the right edge
-                    const labelOnRight = starX < (margin.left + plotWidth * 0.7);
-                    annotation.setAttribute('x', String(labelOnRight ? starX + 14 : starX - 14));
-                    annotation.setAttribute('y', String(starY - 8));
-                    annotation.setAttribute('text-anchor', labelOnRight ? 'start' : 'end');
-                    annotation.setAttribute('font-size', '11');
-                    annotation.setAttribute('fill', starColor);
-                    annotation.classList.add('training-metrics-best-label');
-                    annotation.textContent = annotationText;
-                    svg.appendChild(annotation);
                 }
             }
         }

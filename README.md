@@ -110,6 +110,12 @@ npm run package
 npm run vsix
 ```
 
+## Privacy & Data Handling
+
+When you submit a GPU job, your project data is temporarily shared with a remote processing server. Results are uploaded back to your project, access is revoked after completion, and server data is purged after a limited maintenance window. Your data is never used for other projects without your explicit permission.
+
+For full details, see [PRIVACY.md](PRIVACY.md). You can also view the privacy policy at any time by clicking the 🛡️ shield icon in the GPU Jobs sidebar title bar.
+
 ## Release Notes
 
 ### 0.0.1

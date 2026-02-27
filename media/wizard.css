@@ -437,6 +437,67 @@ button:disabled {
 }
 
 /* ============================================================
+ * Privacy notice (on confirmation page)
+ * ============================================================ */
+
+.privacy-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.15));
+    border-left: 3px solid var(--vscode-charts-blue, #0078d4);
+    border-radius: 4px;
+    background-color: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
+}
+
+.privacy-notice-header {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--vscode-foreground);
+}
+
+.privacy-notice-text {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.6;
+}
+
+.privacy-notice-link {
+    background: none;
+    border: none;
+    color: var(--vscode-textLink-foreground, #3794ff);
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 0;
+    text-align: left;
+    text-decoration: underline;
+}
+
+.privacy-notice-link:hover {
+    color: var(--vscode-textLink-activeForeground, #3794ff);
+    opacity: 1;
+}
+
+.privacy-consent-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    user-select: none;
+    padding-top: 4px;
+    border-top: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    margin-top: 4px;
+}
+
+.privacy-consent-checkbox {
+    accent-color: var(--vscode-checkbox-background, var(--vscode-button-background));
+    flex-shrink: 0;
+}
+
+/* ============================================================
  * Job Detail view
  * ============================================================ */
 
@@ -631,12 +692,6 @@ button:disabled {
 /* Best validation loss star marker */
 .training-metrics-best-star {
     filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
-    pointer-events: none;
-}
-
-.training-metrics-best-label {
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-weight: 500;
     pointer-events: none;
 }
 

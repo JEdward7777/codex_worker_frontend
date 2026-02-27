@@ -50,7 +50,7 @@ const AudioDiscoveryService_1 = __webpack_require__(31);
 const PreflightService_1 = __webpack_require__(33);
 const JobTreeDataProvider_1 = __webpack_require__(34);
 const NewJobWizard_1 = __webpack_require__(35);
-const JobDetailPanel_1 = __webpack_require__(37);
+const JobDetailPanel_1 = __webpack_require__(38);
 // Global service instances
 let gitLabService;
 let manifestService;
@@ -282,7 +282,7 @@ function activate(context) {
      * Returns the new job ID, or null if the user canceled.
      */
     async function runWizardAndCreateJob(presets) {
-        const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService, context.extensionUri);
+        const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService, context.extensionUri, context.globalState);
         const jobParams = await wizard.run(presets);
         if (!jobParams) {
             return null;
@@ -450,7 +450,19 @@ function activate(context) {
             console.error('Remove job error:', error);
         }
     });
-    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, jobTreeDataProvider, treeView, refreshJobsDisposable, newJobDisposable, viewJobDetailDisposable, cancelJobDisposable);
+    // Register privacy policy command — opens PRIVACY.md in the built-in Markdown preview
+    const viewPrivacyPolicyDisposable = vscode.commands.registerCommand('codex-worker.viewPrivacyPolicy', async () => {
+        const privacyUri = vscode.Uri.joinPath(context.extensionUri, 'PRIVACY.md');
+        try {
+            await vscode.commands.executeCommand('markdown.showPreview', privacyUri);
+        }
+        catch {
+            // Fallback: open as a plain text file if Markdown preview is unavailable
+            const doc = await vscode.workspace.openTextDocument(privacyUri);
+            await vscode.window.showTextDocument(doc, { preview: true });
+        }
+    });
+    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, jobTreeDataProvider, treeView, refreshJobsDisposable, newJobDisposable, viewJobDetailDisposable, cancelJobDisposable, viewPrivacyPolicyDisposable);
 }
 // This method is called when your extension is deactivated
 function deactivate() {
@@ -6210,6 +6222,7 @@ exports.NewJobWizard = void 0;
 const vscode = __importStar(__webpack_require__(1));
 const path = __importStar(__webpack_require__(4));
 const WebviewUI_1 = __webpack_require__(36);
+const privacy_1 = __webpack_require__(37);
 /**
  * Wizard for creating new jobs via a webview panel.
  */
@@ -6217,11 +6230,13 @@ class NewJobWizard {
     audioDiscoveryService;
     manifestService;
     extensionUri;
+    globalState;
     workspaceRoot;
-    constructor(audioDiscoveryService, manifestService, extensionUri) {
+    constructor(audioDiscoveryService, manifestService, extensionUri, globalState) {
         this.audioDiscoveryService = audioDiscoveryService;
         this.manifestService = manifestService;
         this.extensionUri = extensionUri;
+        this.globalState = globalState;
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     }
     /**
@@ -6248,13 +6263,26 @@ class NewJobWizard {
                 }
                 // Run preflight checks
                 const preflightResult = await this.runPreflightChecks(result);
-                // Build confirmation data
+                // Build confirmation data (with privacy info)
                 const totalVerses = await this.getTotalVerseCount();
                 const confirmData = this.buildConfirmationData(result, preflightResult, totalVerses);
+                // Add privacy consent state
+                confirmData.privacySummary = privacy_1.PRIVACY_SUMMARY;
+                const consentedVersion = this.globalState?.get(privacy_1.PRIVACY_CONSENT_KEY);
+                confirmData.privacyPreviouslyConsented = consentedVersion === privacy_1.PRIVACY_POLICY_VERSION;
                 // Show confirmation
                 const confirmAction = await ui.showConfirmation(confirmData);
                 if (confirmAction === 'submit') {
+                    // Persist privacy consent if not already stored
+                    if (!confirmData.privacyPreviouslyConsented && this.globalState) {
+                        await this.globalState.update(privacy_1.PRIVACY_CONSENT_KEY, privacy_1.PRIVACY_POLICY_VERSION);
+                    }
                     done = true;
+                }
+                else if (confirmAction === 'view-privacy') {
+                    // Open the full privacy policy and loop back to confirmation
+                    await vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
+                    continue;
                 }
                 else if (confirmAction === 'start-over') {
                     // Loop continues — restart wizard
@@ -7141,7 +7169,7 @@ class WebviewUI {
     }
     /**
      * Show the confirmation/review page.
-     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     * Returns 'submit', 'start-over', 'view-privacy', or undefined (canceled/closed).
      */
     async showConfirmation(data) {
         return this.askWebview({
@@ -7204,6 +7232,40 @@ function getNonce() {
 
 /***/ }),
 /* 37 */
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * Privacy policy constants.
+ *
+ * The authoritative privacy policy lives in PRIVACY.md at the project root.
+ * This file contains only the short summary shown on the job confirmation page.
+ *
+ * If you update PRIVACY.md, review this summary to ensure consistency.
+ * If you update this summary, review PRIVACY.md to ensure consistency.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PRIVACY_SUMMARY = exports.PRIVACY_CONSENT_KEY = exports.PRIVACY_POLICY_VERSION = void 0;
+/** Current privacy policy version. Bump when the policy changes materially. */
+exports.PRIVACY_POLICY_VERSION = 1;
+/**
+ * globalState key used to store the version the user last consented to.
+ * Value is a number matching PRIVACY_POLICY_VERSION, or undefined if never consented.
+ */
+exports.PRIVACY_CONSENT_KEY = 'codex-worker.privacyConsentVersion';
+/**
+ * Short summary shown on the job confirmation page.
+ * Keep this concise — the full policy is in PRIVACY.md.
+ */
+exports.PRIVACY_SUMMARY = [
+    'Your project data will be temporarily shared with a remote GPU processing server to execute this job.',
+    'Results will be uploaded back to your project. The server\u2019s access is automatically revoked after job completion (~24 hr), and residual server data is purged after a limited maintenance window.',
+    'Your data is never used for other projects without your explicit permission.',
+].join(' ');
+
+
+/***/ }),
+/* 38 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 

@@ -157,6 +157,10 @@ export interface ConfirmationPageData {
     };
     warnings: string[];
     errors: string[];
+    /** Short privacy summary text shown on the confirmation page */
+    privacySummary?: string;
+    /** Whether the user has previously consented to the current privacy policy version */
+    privacyPreviouslyConsented?: boolean;
 }
 
 // ============================================================
