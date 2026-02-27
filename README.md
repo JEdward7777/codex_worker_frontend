@@ -4,6 +4,16 @@ A **VS Code–compatible extension** for **[Codex Editor](https://codexeditor.ap
 
 The extension operates by scanning raw project files, generating and updating a **single YAML manifest**, sharing the project with a GitLab-based GPU worker, and tracking job state via filesystem artifacts committed to the repo. The system is intentionally **filesystem- and Git-driven**, with minimal reliance on persistent local state.
 
+## Installation
+
+Install directly from within **[Codex Editor](https://codexeditor.app/)** (or any VS Code–compatible editor that uses the [Open VSX Registry](https://open-vsx.org)):
+
+1. Open the **Extensions** tab (sidebar)
+2. Search for **codex-worker**
+3. Click **Install**
+
+The extension is published on Open VSX as [`jlansford.codex-worker`](https://open-vsx.org/extension/jlansford/codex-worker).
+
 ## Features
 
 ### Sidebar Panel
