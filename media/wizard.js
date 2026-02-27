@@ -1082,6 +1082,12 @@
             container.appendChild(actionsSection);
         }
 
+        // Training Metrics Graph (at the bottom, before close button)
+        if (data.trainingMetrics && data.trainingMetrics.epochs.length > 0 && data.trainingMetrics.columns.length > 0) {
+            const metricsSection = renderTrainingMetrics(data.trainingMetrics);
+            container.appendChild(metricsSection);
+        }
+
         // Close button (always available)
         const footerRow = document.createElement('div');
         footerRow.className = 'button-row';
@@ -1201,6 +1207,479 @@
             case 'open-job-folder': return 'Reveal the job folder in the file explorer';
             default: return '';
         }
+    }
+
+    // ================================================================
+    // Training Metrics Graph
+    // ================================================================
+
+    /** Color palette for metric lines — works in both dark and light themes */
+    const METRIC_COLORS = {
+        'train_total_loss': '#4fc3f7',
+        'val_total_loss': '#ff8a65',
+        'train_diff_loss': '#81c784',
+        'train_dur_loss': '#ba68c8',
+        'train_prior_loss': '#fff176',
+        'val_diff_loss': '#e57373',
+        'val_dur_loss': '#4db6ac',
+        'val_prior_loss': '#a1887f',
+    };
+
+    /** Fallback colors for unknown columns */
+    const FALLBACK_COLORS = [
+        '#4fc3f7', '#ff8a65', '#81c784', '#ba68c8',
+        '#fff176', '#e57373', '#4db6ac', '#a1887f',
+        '#90caf9', '#ffab91', '#a5d6a7', '#ce93d8',
+    ];
+
+    /** Primary columns that get special treatment */
+    const PRIMARY_COLUMNS = ['train_total_loss', 'val_total_loss'];
+
+    /**
+     * Render the training metrics section with SVG line graph.
+     * @param {object} metrics - TrainingMetricsData object
+     * @returns {HTMLElement} The metrics section element
+     */
+    function renderTrainingMetrics(metrics) {
+        const section = document.createElement('div');
+        section.className = 'training-metrics-section';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Training Metrics';
+        section.appendChild(title);
+
+        // Determine which columns to show initially
+        const hasPrimary = metrics.hasPrimaryColumns;
+        let visibleColumns;
+        if (hasPrimary) {
+            visibleColumns = PRIMARY_COLUMNS.slice();
+        } else {
+            visibleColumns = metrics.columns.slice();
+        }
+
+        // Graph container
+        const graphContainer = document.createElement('div');
+        graphContainer.className = 'training-metrics-graph-container';
+        section.appendChild(graphContainer);
+
+        // Render the initial graph
+        renderSvgGraph(graphContainer, metrics, visibleColumns);
+
+        // Legend
+        const legend = document.createElement('div');
+        legend.className = 'training-metrics-legend';
+        section.appendChild(legend);
+        updateLegend(legend, visibleColumns);
+
+        // Checkbox to show detailed metrics (only when primary columns exist)
+        if (hasPrimary && metrics.columns.length > 2) {
+            const checkboxContainer = document.createElement('div');
+            checkboxContainer.className = 'training-metrics-checkbox-container';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = 'show-detailed-metrics';
+
+            const label = document.createElement('label');
+            label.htmlFor = 'show-detailed-metrics';
+            label.textContent = ' Show detailed metrics';
+
+            checkboxContainer.appendChild(checkbox);
+            checkboxContainer.appendChild(label);
+            section.appendChild(checkboxContainer);
+
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    visibleColumns = metrics.columns.slice();
+                } else {
+                    visibleColumns = PRIMARY_COLUMNS.slice();
+                }
+                graphContainer.innerHTML = '';
+                renderSvgGraph(graphContainer, metrics, visibleColumns);
+                updateLegend(legend, visibleColumns);
+            });
+        }
+
+        // Explanatory text (only when primary columns exist)
+        if (hasPrimary) {
+            const explanation = document.createElement('div');
+            explanation.className = 'training-metrics-explanation';
+            explanation.innerHTML =
+                '<p><strong>Training Loss</strong>: How well the model fits the training data. ' +
+                'Lower values indicate the model is learning the patterns in your audio data.</p>' +
+                '<p><strong>Validation Loss</strong>: How well the model generalizes to unseen data. ' +
+                'Lower values are better. If validation loss rises while training loss continues to fall, ' +
+                'the model may be overfitting — memorizing the training data rather than learning ' +
+                'generalizable patterns.</p>';
+            section.appendChild(explanation);
+        }
+
+        return section;
+    }
+
+    /**
+     * Update the legend to show currently visible columns.
+     * @param {HTMLElement} legendEl
+     * @param {string[]} visibleColumns
+     */
+    function updateLegend(legendEl, visibleColumns) {
+        legendEl.innerHTML = '';
+        for (const col of visibleColumns) {
+            const item = document.createElement('span');
+            item.className = 'training-metrics-legend-item';
+
+            const swatch = document.createElement('span');
+            swatch.className = 'training-metrics-legend-swatch';
+            swatch.style.backgroundColor = getMetricColor(col);
+            item.appendChild(swatch);
+
+            const label = document.createElement('span');
+            label.textContent = formatMetricName(col);
+            item.appendChild(label);
+
+            legendEl.appendChild(item);
+        }
+    }
+
+    /**
+     * Get the color for a metric column.
+     * @param {string} column
+     * @returns {string}
+     */
+    function getMetricColor(column) {
+        if (METRIC_COLORS[column]) {
+            return METRIC_COLORS[column];
+        }
+        // Fallback: hash the column name to pick a color
+        let hash = 0;
+        for (let i = 0; i < column.length; i++) {
+            hash = ((hash << 5) - hash) + column.charCodeAt(i);
+            hash |= 0;
+        }
+        return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
+    }
+
+    /**
+     * Format a metric column name for display.
+     * e.g., "train_total_loss" → "Train Total Loss"
+     * @param {string} name
+     * @returns {string}
+     */
+    function formatMetricName(name) {
+        return name
+            .split('_')
+            .map(function (word) { return word.charAt(0).toUpperCase() + word.slice(1); })
+            .join(' ');
+    }
+
+    /**
+     * Render an SVG line chart into the given container.
+     * @param {HTMLElement} container
+     * @param {object} metrics - TrainingMetricsData
+     * @param {string[]} visibleColumns - Which columns to plot
+     */
+    function renderSvgGraph(container, metrics, visibleColumns) {
+        // Chart dimensions
+        const margin = { top: 20, right: 20, bottom: 50, left: 70 };
+        const chartHeight = 400;
+        // We'll use viewBox for responsive width; the actual width is set via CSS
+        const chartWidth = 800;
+        const plotWidth = chartWidth - margin.left - margin.right;
+        const plotHeight = chartHeight - margin.top - margin.bottom;
+
+        // Calculate data range
+        const epochs = metrics.epochs;
+        const xMin = Math.min.apply(null, epochs);
+        const xMax = Math.max.apply(null, epochs);
+
+        let yMin = Infinity;
+        let yMax = -Infinity;
+        for (const col of visibleColumns) {
+            const data = metrics.series[col];
+            if (!data) { continue; }
+            for (let i = 0; i < data.length; i++) {
+                if (!isNaN(data[i])) {
+                    if (data[i] < yMin) { yMin = data[i]; }
+                    if (data[i] > yMax) { yMax = data[i]; }
+                }
+            }
+        }
+
+        // Add 5% padding to Y range
+        if (yMin === Infinity || yMax === -Infinity) {
+            yMin = 0;
+            yMax = 1;
+        }
+        const yRange = yMax - yMin;
+        const yPadding = yRange * 0.05 || 0.1;
+        yMin = yMin - yPadding;
+        yMax = yMax + yPadding;
+
+        // Scale functions
+        function scaleX(val) {
+            if (xMax === xMin) { return margin.left + plotWidth / 2; }
+            return margin.left + ((val - xMin) / (xMax - xMin)) * plotWidth;
+        }
+        function scaleY(val) {
+            if (yMax === yMin) { return margin.top + plotHeight / 2; }
+            return margin.top + plotHeight - ((val - yMin) / (yMax - yMin)) * plotHeight;
+        }
+
+        // Create SVG
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('viewBox', '0 0 ' + chartWidth + ' ' + chartHeight);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        svg.classList.add('training-metrics-svg');
+
+        // Background
+        const bg = document.createElementNS(svgNS, 'rect');
+        bg.setAttribute('x', '0');
+        bg.setAttribute('y', '0');
+        bg.setAttribute('width', String(chartWidth));
+        bg.setAttribute('height', String(chartHeight));
+        bg.classList.add('training-metrics-bg');
+        svg.appendChild(bg);
+
+        // Grid lines (Y-axis)
+        const yTickCount = 6;
+        for (let i = 0; i <= yTickCount; i++) {
+            const yVal = yMin + (yMax - yMin) * (i / yTickCount);
+            const y = scaleY(yVal);
+
+            // Grid line
+            const gridLine = document.createElementNS(svgNS, 'line');
+            gridLine.setAttribute('x1', String(margin.left));
+            gridLine.setAttribute('y1', String(y));
+            gridLine.setAttribute('x2', String(chartWidth - margin.right));
+            gridLine.setAttribute('y2', String(y));
+            gridLine.classList.add('training-metrics-grid');
+            svg.appendChild(gridLine);
+
+            // Y-axis label
+            const label = document.createElementNS(svgNS, 'text');
+            label.setAttribute('x', String(margin.left - 10));
+            label.setAttribute('y', String(y + 4));
+            label.setAttribute('text-anchor', 'end');
+            label.classList.add('training-metrics-axis-label');
+            label.textContent = yVal.toFixed(2);
+            svg.appendChild(label);
+        }
+
+        // X-axis labels
+        const xTickCount = Math.min(epochs.length, 10);
+        const xStep = Math.max(1, Math.floor(epochs.length / xTickCount));
+        for (let i = 0; i < epochs.length; i += xStep) {
+            const x = scaleX(epochs[i]);
+
+            // Tick mark
+            const tick = document.createElementNS(svgNS, 'line');
+            tick.setAttribute('x1', String(x));
+            tick.setAttribute('y1', String(margin.top + plotHeight));
+            tick.setAttribute('x2', String(x));
+            tick.setAttribute('y2', String(margin.top + plotHeight + 6));
+            tick.classList.add('training-metrics-tick');
+            svg.appendChild(tick);
+
+            // X-axis label
+            const label = document.createElementNS(svgNS, 'text');
+            label.setAttribute('x', String(x));
+            label.setAttribute('y', String(margin.top + plotHeight + 22));
+            label.setAttribute('text-anchor', 'middle');
+            label.classList.add('training-metrics-axis-label');
+            label.textContent = String(Math.round(epochs[i]));
+            svg.appendChild(label);
+        }
+
+        // Axis lines
+        // Y-axis
+        const yAxis = document.createElementNS(svgNS, 'line');
+        yAxis.setAttribute('x1', String(margin.left));
+        yAxis.setAttribute('y1', String(margin.top));
+        yAxis.setAttribute('x2', String(margin.left));
+        yAxis.setAttribute('y2', String(margin.top + plotHeight));
+        yAxis.classList.add('training-metrics-axis');
+        svg.appendChild(yAxis);
+
+        // X-axis
+        const xAxis = document.createElementNS(svgNS, 'line');
+        xAxis.setAttribute('x1', String(margin.left));
+        xAxis.setAttribute('y1', String(margin.top + plotHeight));
+        xAxis.setAttribute('x2', String(chartWidth - margin.right));
+        xAxis.setAttribute('y2', String(margin.top + plotHeight));
+        xAxis.classList.add('training-metrics-axis');
+        svg.appendChild(xAxis);
+
+        // Axis titles
+        // X-axis title
+        const xTitle = document.createElementNS(svgNS, 'text');
+        xTitle.setAttribute('x', String(margin.left + plotWidth / 2));
+        xTitle.setAttribute('y', String(chartHeight - 5));
+        xTitle.setAttribute('text-anchor', 'middle');
+        xTitle.classList.add('training-metrics-axis-title');
+        xTitle.textContent = 'Epoch';
+        svg.appendChild(xTitle);
+
+        // Y-axis title (rotated)
+        const yTitle = document.createElementNS(svgNS, 'text');
+        yTitle.setAttribute('x', String(-(margin.top + plotHeight / 2)));
+        yTitle.setAttribute('y', '15');
+        yTitle.setAttribute('text-anchor', 'middle');
+        yTitle.setAttribute('transform', 'rotate(-90)');
+        yTitle.classList.add('training-metrics-axis-title');
+        yTitle.textContent = 'Loss';
+        svg.appendChild(yTitle);
+
+        // Plot lines
+        for (const col of visibleColumns) {
+            const data = metrics.series[col];
+            if (!data) { continue; }
+
+            const color = getMetricColor(col);
+            const isPrimary = PRIMARY_COLUMNS.indexOf(col) !== -1;
+            const strokeWidth = isPrimary ? '2.5' : '1.5';
+
+            // Build path data, skipping NaN values
+            let pathData = '';
+            let started = false;
+            for (let i = 0; i < epochs.length && i < data.length; i++) {
+                if (isNaN(data[i])) {
+                    started = false;
+                    continue;
+                }
+                const x = scaleX(epochs[i]);
+                const y = scaleY(data[i]);
+                if (!started) {
+                    pathData += 'M ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+                    started = true;
+                } else {
+                    pathData += 'L ' + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+                }
+            }
+
+            if (pathData) {
+                const path = document.createElementNS(svgNS, 'path');
+                path.setAttribute('d', pathData);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', color);
+                path.setAttribute('stroke-width', strokeWidth);
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('stroke-linecap', 'round');
+                svg.appendChild(path);
+            }
+        }
+
+        // Tooltip overlay — invisible rect to capture mouse events
+        const overlay = document.createElementNS(svgNS, 'rect');
+        overlay.setAttribute('x', String(margin.left));
+        overlay.setAttribute('y', String(margin.top));
+        overlay.setAttribute('width', String(plotWidth));
+        overlay.setAttribute('height', String(plotHeight));
+        overlay.setAttribute('fill', 'transparent');
+        overlay.style.cursor = 'crosshair';
+        svg.appendChild(overlay);
+
+        // Tooltip vertical line
+        const tooltipLine = document.createElementNS(svgNS, 'line');
+        tooltipLine.setAttribute('y1', String(margin.top));
+        tooltipLine.setAttribute('y2', String(margin.top + plotHeight));
+        tooltipLine.classList.add('training-metrics-tooltip-line');
+        tooltipLine.style.display = 'none';
+        svg.appendChild(tooltipLine);
+
+        // Tooltip dots group
+        const dotsGroup = document.createElementNS(svgNS, 'g');
+        dotsGroup.style.display = 'none';
+        svg.appendChild(dotsGroup);
+
+        container.appendChild(svg);
+
+        // Tooltip HTML element (positioned absolutely over the SVG)
+        const tooltipEl = document.createElement('div');
+        tooltipEl.className = 'training-metrics-tooltip';
+        tooltipEl.style.display = 'none';
+        container.appendChild(tooltipEl);
+
+        // Mouse event handlers for tooltip
+        overlay.addEventListener('mousemove', function (e) {
+            const svgRect = svg.getBoundingClientRect();
+            const svgWidth = svgRect.width;
+            const svgHeight = svgRect.height;
+
+            // Convert mouse position to SVG coordinate space
+            const mouseX = (e.clientX - svgRect.left) / svgWidth * chartWidth;
+
+            // Find nearest epoch
+            let nearestIdx = 0;
+            let nearestDist = Infinity;
+            for (let i = 0; i < epochs.length; i++) {
+                const x = scaleX(epochs[i]);
+                const dist = Math.abs(x - mouseX);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestIdx = i;
+                }
+            }
+
+            const epochX = scaleX(epochs[nearestIdx]);
+
+            // Update vertical line
+            tooltipLine.setAttribute('x1', String(epochX));
+            tooltipLine.setAttribute('x2', String(epochX));
+            tooltipLine.style.display = '';
+
+            // Update dots
+            dotsGroup.innerHTML = '';
+            dotsGroup.style.display = '';
+
+            // Build tooltip content
+            let html = '<strong>Epoch ' + Math.round(epochs[nearestIdx]) + '</strong>';
+            for (const col of visibleColumns) {
+                const data = metrics.series[col];
+                if (!data || nearestIdx >= data.length || isNaN(data[nearestIdx])) { continue; }
+                const val = data[nearestIdx];
+                const color = getMetricColor(col);
+
+                html += '<div class="training-metrics-tooltip-row">' +
+                    '<span class="training-metrics-tooltip-swatch" style="background:' + color + '"></span>' +
+                    '<span>' + formatMetricName(col) + ': ' + val.toFixed(4) + '</span></div>';
+
+                // Add dot on the line
+                const dot = document.createElementNS(svgNS, 'circle');
+                dot.setAttribute('cx', String(epochX));
+                dot.setAttribute('cy', String(scaleY(val)));
+                dot.setAttribute('r', '4');
+                dot.setAttribute('fill', color);
+                dot.setAttribute('stroke', 'var(--vscode-editor-background, #1e1e1e)');
+                dot.setAttribute('stroke-width', '1.5');
+                dotsGroup.appendChild(dot);
+            }
+
+            tooltipEl.innerHTML = html;
+            tooltipEl.style.display = 'block';
+
+            // Position tooltip near the mouse but within bounds
+            const tooltipX = (e.clientX - svgRect.left) + 15;
+            const tooltipY = (e.clientY - svgRect.top) - 10;
+            tooltipEl.style.left = tooltipX + 'px';
+            tooltipEl.style.top = tooltipY + 'px';
+
+            // Keep tooltip within container bounds
+            const containerRect = container.getBoundingClientRect();
+            const tooltipRect = tooltipEl.getBoundingClientRect();
+            if (tooltipRect.right > containerRect.right) {
+                tooltipEl.style.left = (tooltipX - tooltipRect.width - 30) + 'px';
+            }
+            if (tooltipRect.bottom > containerRect.bottom) {
+                tooltipEl.style.top = (tooltipY - tooltipRect.height) + 'px';
+            }
+        });
+
+        overlay.addEventListener('mouseleave', function () {
+            tooltipLine.style.display = 'none';
+            dotsGroup.style.display = 'none';
+            tooltipEl.style.display = 'none';
+        });
     }
 
     // ================================================================

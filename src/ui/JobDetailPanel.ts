@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { JobWithState, WorkerResponse, JobState } from '../types/manifest';
-import { JobDetailData, JobDetailAction } from '../types/ui';
+import { JobDetailData, JobDetailAction, TrainingMetricsData } from '../types/ui';
 import { ManifestService } from '../services/ManifestService';
 import { WebviewUI } from './WebviewUI';
 
@@ -171,6 +171,7 @@ export class JobDetailPanel {
             voiceReference: job.voice_reference,
             hasJobFolder: !!(jobFolderPath && fs.existsSync(jobFolderPath)),
             availableActions,
+            trainingMetrics: this.parseTrainingMetrics(job.job_id),
         };
     }
 
@@ -298,6 +299,121 @@ export class JobDetailPanel {
             return job.model.base_checkpoint ?? null;
         }
         return null;
+    }
+
+    /**
+     * Parse the training_metrics.csv file for a job, if it exists.
+     * Returns undefined if the file doesn't exist or has no valid data.
+     *
+     * Resilience rules:
+     * - Missing file → undefined (no graph shown)
+     * - Empty file or no data rows → undefined
+     * - Missing columns → only include columns that exist
+     * - Non-numeric values → skip that cell
+     */
+    private parseTrainingMetrics(jobId: string): TrainingMetricsData | undefined {
+        const jobFolderPath = this.getJobFolderPath(jobId);
+        if (!jobFolderPath) {
+            return undefined;
+        }
+
+        const csvPath = path.join(jobFolderPath, 'checkpoint', 'training_metrics.csv');
+        if (!fs.existsSync(csvPath)) {
+            return undefined;
+        }
+
+        try {
+            const content = fs.readFileSync(csvPath, 'utf8').trim();
+            if (!content) {
+                return undefined;
+            }
+
+            const lines = content.split(/\r?\n/);
+            if (lines.length < 2) {
+                // Need at least a header row and one data row
+                return undefined;
+            }
+
+            const headers = lines[0].split(',').map(h => h.trim());
+            const epochIndex = headers.indexOf('epoch');
+
+            // Identify numeric data columns (everything except 'epoch')
+            const dataColumns = headers.filter(h => h !== 'epoch' && h.length > 0);
+            if (dataColumns.length === 0) {
+                return undefined;
+            }
+
+            const epochs: number[] = [];
+            const series: Record<string, number[]> = {};
+            for (const col of dataColumns) {
+                series[col] = [];
+            }
+
+            // Parse data rows
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    continue;
+                }
+
+                const values = line.split(',').map(v => v.trim());
+
+                // Parse epoch number
+                let epoch: number;
+                if (epochIndex >= 0 && epochIndex < values.length) {
+                    epoch = parseFloat(values[epochIndex]);
+                    if (isNaN(epoch)) {
+                        continue; // Skip rows with invalid epoch
+                    }
+                } else {
+                    // No epoch column — use row index as epoch
+                    epoch = i - 1;
+                }
+                epochs.push(epoch);
+
+                // Parse each data column
+                for (const col of dataColumns) {
+                    const colIndex = headers.indexOf(col);
+                    if (colIndex >= 0 && colIndex < values.length) {
+                        const val = parseFloat(values[colIndex]);
+                        series[col].push(isNaN(val) ? NaN : val);
+                    } else {
+                        series[col].push(NaN);
+                    }
+                }
+            }
+
+            if (epochs.length === 0) {
+                return undefined;
+            }
+
+            // Filter out columns that are entirely NaN
+            const validColumns = dataColumns.filter(col =>
+                series[col].some(v => !isNaN(v))
+            );
+            if (validColumns.length === 0) {
+                return undefined;
+            }
+
+            // Remove invalid columns from series
+            const validSeries: Record<string, number[]> = {};
+            for (const col of validColumns) {
+                validSeries[col] = series[col];
+            }
+
+            const hasPrimaryColumns =
+                validColumns.includes('train_total_loss') &&
+                validColumns.includes('val_total_loss');
+
+            return {
+                columns: validColumns,
+                epochs,
+                series: validSeries,
+                hasPrimaryColumns,
+            };
+        } catch {
+            return undefined;
+        }
     }
 
     /**

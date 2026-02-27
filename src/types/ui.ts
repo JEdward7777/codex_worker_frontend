@@ -160,6 +160,25 @@ export interface ConfirmationPageData {
 }
 
 // ============================================================
+// Training Metrics Types
+// ============================================================
+
+/**
+ * Parsed training metrics data from a CSV file.
+ * Each row represents one epoch's worth of loss values.
+ */
+export interface TrainingMetricsData {
+    /** Column headers from the CSV (excluding 'epoch') */
+    columns: string[];
+    /** Epoch numbers (X-axis values) */
+    epochs: number[];
+    /** Loss values keyed by column name, each array parallel to epochs[] */
+    series: Record<string, number[]>;
+    /** Whether the known primary columns (train_total_loss, val_total_loss) are present */
+    hasPrimaryColumns: boolean;
+}
+
+// ============================================================
 // Job Detail Types
 // ============================================================
 
@@ -201,6 +220,8 @@ export interface JobDetailData {
     hasJobFolder: boolean;
     /** Which actions are valid for this job's current state */
     availableActions: JobDetailAction[];
+    /** Training metrics data parsed from CSV, if available */
+    trainingMetrics?: TrainingMetricsData;
 }
 
 // ============================================================

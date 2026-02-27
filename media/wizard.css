@@ -557,6 +557,188 @@ button:disabled {
 }
 
 /* ============================================================
+ * Training Metrics Graph
+ * ============================================================ */
+
+.training-metrics-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+}
+
+.training-metrics-section h3 {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 0;
+}
+
+.training-metrics-graph-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.training-metrics-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* SVG background */
+.training-metrics-bg {
+    fill: var(--vscode-editor-background, #1e1e1e);
+}
+
+/* Grid lines */
+.training-metrics-grid {
+    stroke: var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+    stroke-width: 0.5;
+    stroke-dasharray: 4 4;
+}
+
+/* Axis lines */
+.training-metrics-axis {
+    stroke: var(--vscode-editor-foreground, #cccccc);
+    stroke-width: 1;
+}
+
+/* Axis tick marks */
+.training-metrics-tick {
+    stroke: var(--vscode-editor-foreground, #cccccc);
+    stroke-width: 1;
+}
+
+/* Axis labels (numbers) */
+.training-metrics-axis-label {
+    fill: var(--vscode-descriptionForeground, #999999);
+    font-size: 11px;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* Axis titles (Epoch, Loss) */
+.training-metrics-axis-title {
+    fill: var(--vscode-foreground, #cccccc);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Tooltip vertical line */
+.training-metrics-tooltip-line {
+    stroke: var(--vscode-editor-foreground, #cccccc);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    opacity: 0.6;
+}
+
+/* Tooltip popup */
+.training-metrics-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--vscode-editorHoverWidget-background, #252526);
+    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-size: 0.85em;
+    line-height: 1.5;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    max-width: 280px;
+    color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+}
+
+.training-metrics-tooltip strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.95em;
+}
+
+.training-metrics-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.training-metrics-tooltip-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+/* Legend */
+.training-metrics-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.training-metrics-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85em;
+    color: var(--vscode-foreground);
+}
+
+.training-metrics-legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+/* Checkbox container */
+.training-metrics-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    user-select: none;
+}
+
+.training-metrics-checkbox-container input[type="checkbox"] {
+    accent-color: var(--vscode-checkbox-background, var(--vscode-button-background));
+}
+
+.training-metrics-checkbox-container label {
+    cursor: pointer;
+}
+
+/* Explanatory text */
+.training-metrics-explanation {
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.6;
+    padding: 8px 12px;
+    background-color: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
+    border-left: 3px solid var(--vscode-textBlockQuote-border, rgba(127, 127, 127, 0.3));
+    border-radius: 2px;
+}
+
+.training-metrics-explanation p {
+    margin: 0 0 6px 0;
+}
+
+.training-metrics-explanation p:last-child {
+    margin-bottom: 0;
+}
+
+.training-metrics-explanation strong {
+    color: var(--vscode-foreground);
+}
+
+/* ============================================================
  * Loading / transition state
  * ============================================================ */
 
