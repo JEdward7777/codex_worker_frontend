@@ -1,6 +1,6 @@
 # Codex Worker
 
-A **VS Code–compatible extension** for **Codex Editor** that enables users to create and manage **GPU-intensive background jobs**, starting with **TTS model training and inference**.
+A **VS Code–compatible extension** for **[Codex Editor](https://codexeditor.app/)** that enables users to create and manage **GPU-intensive background jobs**, currently supporting **TTS (Text-to-Speech) model training and inference**, with **ASR (Automatic Speech Recognition)** support planned as a future addition.
 
 The extension operates by scanning raw project files, generating and updating a **single YAML manifest**, sharing the project with a GitLab-based GPU worker, and tracking job state via filesystem artifacts committed to the repo. The system is intentionally **filesystem- and Git-driven**, with minimal reliance on persistent local state.
 
@@ -27,8 +27,6 @@ The extension operates by scanning raw project files, generating and updating a 
 ### Audio & Text Discovery
 
 - Scans `./files/target/**/*.codex` for text and audio references
-- `.codex` files (JSON cells) are the **single source of truth**
-- No heuristic or filesystem fallback
 
 ### Manifest Generation
 
@@ -74,7 +72,6 @@ Before writing the manifest, the extension validates:
 | Command                                  | Description                        |
 | ---------------------------------------- | ---------------------------------- |
 | **GPU Jobs: Test GitLab Connection**     | Verify GitLab connectivity         |
-| **GPU Jobs: Test Manifest Generation**   | Test manifest creation             |
 | **GPU Jobs: Test Audio Discovery**       | Test audio file discovery          |
 | **New Job**                              | Create a new GPU job               |
 | **Refresh Jobs**                         | Refresh the jobs list              |
@@ -82,10 +79,12 @@ Before writing the manifest, the extension validates:
 
 ## Extensibility
 
-- The manifest supports multiple job types (TTS now, others later)
-- Multiple TTS model types are supported
+- The manifest supports multiple job types (TTS currently; ASR and others planned)
+- Multiple TTS model types can be supported currently only [StableTTS](https://github.com/KdaiP/StableTTS).
 - The UI avoids hard-coded assumptions that would prevent new job types
 - The manifest `version` field allows future breaking changes
+- The [codex-job-worker backend](https://github.com/JEdward7777/codex-job-worker) already has ASR via Wav2Vec2-BERT in the works — frontend integration is a planned future addition
+- See the [codex-job-worker manifest documentation](https://github.com/JEdward7777/codex-job-worker#job-manifest-system) for the full manifest format specification
 
 ## Technology
 
@@ -115,6 +114,14 @@ npm run vsix
 When you submit a GPU job, your project data is temporarily shared with a remote processing server. Results are uploaded back to your project, access is revoked after completion, and server data is purged after a limited maintenance window. Your data is never used for other projects without your explicit permission.
 
 For full details, see [PRIVACY.md](PRIVACY.md). You can also view the privacy policy at any time by clicking the 🛡️ shield icon in the GPU Jobs sidebar title bar.
+
+## Related Projects
+
+- **[codex-job-worker](https://github.com/JEdward7777/codex-job-worker)** — The GPU worker backend that processes jobs created by this extension. It claims jobs from the YAML manifest, executes TTS/ASR training and inference, and uploads results back to GitLab.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Release Notes
 
