@@ -918,12 +918,13 @@
             privacyText.textContent = data.privacySummary;
             privacySection.appendChild(privacyText);
 
-            // "View full privacy policy" link
+            // "View full privacy policy" link — uses a non-task message so the
+            // confirmation page stays active (does NOT resolve the current task)
             const privacyLink = document.createElement('button');
             privacyLink.className = 'privacy-notice-link';
             privacyLink.textContent = 'View full privacy policy';
             privacyLink.addEventListener('click', () => {
-                respond('view-privacy');
+                vscode.postMessage({ type: 'open-privacy-policy' });
             });
             privacySection.appendChild(privacyLink);
 

@@ -99,10 +99,6 @@ export class NewJobWizard {
                         await this.globalState.update(PRIVACY_CONSENT_KEY, PRIVACY_POLICY_VERSION);
                     }
                     done = true;
-                } else if (confirmAction === 'view-privacy') {
-                    // Open the full privacy policy and loop back to confirmation
-                    await vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
-                    continue;
                 } else if (confirmAction === 'start-over') {
                     // Loop continues — restart wizard
                     result = null;

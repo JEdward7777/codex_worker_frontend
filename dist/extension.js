@@ -50,7 +50,7 @@ const AudioDiscoveryService_1 = __webpack_require__(31);
 const PreflightService_1 = __webpack_require__(33);
 const JobTreeDataProvider_1 = __webpack_require__(34);
 const NewJobWizard_1 = __webpack_require__(35);
-const JobDetailPanel_1 = __webpack_require__(38);
+const JobDetailPanel_1 = __webpack_require__(37);
 // Global service instances
 let gitLabService;
 let manifestService;
@@ -6222,7 +6222,7 @@ exports.NewJobWizard = void 0;
 const vscode = __importStar(__webpack_require__(1));
 const path = __importStar(__webpack_require__(4));
 const WebviewUI_1 = __webpack_require__(36);
-const privacy_1 = __webpack_require__(37);
+const privacy_1 = __webpack_require__(38);
 /**
  * Wizard for creating new jobs via a webview panel.
  */
@@ -6278,11 +6278,6 @@ class NewJobWizard {
                         await this.globalState.update(privacy_1.PRIVACY_CONSENT_KEY, privacy_1.PRIVACY_POLICY_VERSION);
                     }
                     done = true;
-                }
-                else if (confirmAction === 'view-privacy') {
-                    // Open the full privacy policy and loop back to confirmation
-                    await vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
-                    continue;
                 }
                 else if (confirmAction === 'start-over') {
                     // Loop continues — restart wizard
@@ -7046,6 +7041,11 @@ class WebviewUI {
                 });
                 return;
             }
+            // Handle privacy policy view request (non-task message — does not resolve pending task)
+            if (msg.type === 'open-privacy-policy') {
+                vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
+                return;
+            }
             if (!this.pendingResolve || !this.pendingTaskId) {
                 return;
             }
@@ -7169,7 +7169,9 @@ class WebviewUI {
     }
     /**
      * Show the confirmation/review page.
-     * Returns 'submit', 'start-over', 'view-privacy', or undefined (canceled/closed).
+     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     * Note: "View full privacy policy" is handled as a non-task message
+     * (open-privacy-policy) so it doesn't resolve the pending task.
      */
     async showConfirmation(data) {
         return this.askWebview({
@@ -7232,40 +7234,6 @@ function getNonce() {
 
 /***/ }),
 /* 37 */
-/***/ ((__unused_webpack_module, exports) => {
-
-
-/**
- * Privacy policy constants.
- *
- * The authoritative privacy policy lives in PRIVACY.md at the project root.
- * This file contains only the short summary shown on the job confirmation page.
- *
- * If you update PRIVACY.md, review this summary to ensure consistency.
- * If you update this summary, review PRIVACY.md to ensure consistency.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PRIVACY_SUMMARY = exports.PRIVACY_CONSENT_KEY = exports.PRIVACY_POLICY_VERSION = void 0;
-/** Current privacy policy version. Bump when the policy changes materially. */
-exports.PRIVACY_POLICY_VERSION = 1;
-/**
- * globalState key used to store the version the user last consented to.
- * Value is a number matching PRIVACY_POLICY_VERSION, or undefined if never consented.
- */
-exports.PRIVACY_CONSENT_KEY = 'codex-worker.privacyConsentVersion';
-/**
- * Short summary shown on the job confirmation page.
- * Keep this concise — the full policy is in PRIVACY.md.
- */
-exports.PRIVACY_SUMMARY = [
-    'Your project data will be temporarily shared with a remote GPU processing server to execute this job.',
-    'Results will be uploaded back to your project. The server\u2019s access is automatically revoked after job completion (~24 hr), and residual server data is purged after a limited maintenance window.',
-    'Your data is never used for other projects without your explicit permission.',
-].join(' ');
-
-
-/***/ }),
-/* 38 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7694,6 +7662,40 @@ class JobDetailPanel {
     }
 }
 exports.JobDetailPanel = JobDetailPanel;
+
+
+/***/ }),
+/* 38 */
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * Privacy policy constants.
+ *
+ * The authoritative privacy policy lives in PRIVACY.md at the project root.
+ * This file contains only the short summary shown on the job confirmation page.
+ *
+ * If you update PRIVACY.md, review this summary to ensure consistency.
+ * If you update this summary, review PRIVACY.md to ensure consistency.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PRIVACY_SUMMARY = exports.PRIVACY_CONSENT_KEY = exports.PRIVACY_POLICY_VERSION = void 0;
+/** Current privacy policy version. Bump when the policy changes materially. */
+exports.PRIVACY_POLICY_VERSION = 1;
+/**
+ * globalState key used to store the version the user last consented to.
+ * Value is a number matching PRIVACY_POLICY_VERSION, or undefined if never consented.
+ */
+exports.PRIVACY_CONSENT_KEY = 'codex-worker.privacyConsentVersion';
+/**
+ * Short summary shown on the job confirmation page.
+ * Keep this concise — the full policy is in PRIVACY.md.
+ */
+exports.PRIVACY_SUMMARY = [
+    'Your project data will be temporarily shared with a remote GPU processing server to execute this job.',
+    'Results will be uploaded back to your project. The server\u2019s access is automatically revoked after job completion (~24 hr), and residual server data is purged after a limited maintenance window.',
+    'Your data is never used for other projects without your explicit permission.',
+].join(' ');
 
 
 /***/ })

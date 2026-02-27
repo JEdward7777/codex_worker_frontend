@@ -3,6 +3,10 @@
   "displayName": "codex-worker",
   "description": "codex-worker is a Codex Editor (VS Code–compatible) extension that lets users define, submit, and monitor GPU-intensive background jobs—starting with TTS training and inference—by generating a versioned YAML manifest inside the project. It scans raw Codex project files to build datasets, performs preflight validation, manages GitLab project sharing with GPU workers, and tracks job state purely through repository artifacts, enabling reliable, resumable processing without tight coupling to worker infrastructure.",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JEdward7777/codex_worker_frontend.git"
+  },
   "engines": {
     "vscode": "^1.77.1"
   },

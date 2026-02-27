@@ -86,6 +86,12 @@ export class WebviewUI {
                     return;
                 }
 
+                // Handle privacy policy view request (non-task message — does not resolve pending task)
+                if (msg.type === 'open-privacy-policy') {
+                    vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
+                    return;
+                }
+
                 if (!this.pendingResolve || !this.pendingTaskId) {
                     return;
                 }
@@ -241,12 +247,14 @@ export class WebviewUI {
 
     /**
      * Show the confirmation/review page.
-     * Returns 'submit', 'start-over', 'view-privacy', or undefined (canceled/closed).
+     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     * Note: "View full privacy policy" is handled as a non-task message
+     * (open-privacy-policy) so it doesn't resolve the pending task.
      */
     async showConfirmation(
         data: ConfirmationPageData
-    ): Promise<'submit' | 'start-over' | 'view-privacy' | undefined> {
-        return this.askWebview<'submit' | 'start-over' | 'view-privacy'>({
+    ): Promise<'submit' | 'start-over' | undefined> {
+        return this.askWebview<'submit' | 'start-over'>({
             taskType: 'confirmation',
             data,
         });
