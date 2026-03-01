@@ -127,6 +127,7 @@ For full details, see [PRIVACY.md](PRIVACY.md). You can also view the privacy po
 
 ## Related Projects
 
+- **[codex_worker_frontend](https://github.com/JEdward7777/codex_worker_frontend)** — This extension's source code (you are here).
 - **[codex-job-worker](https://github.com/JEdward7777/codex-job-worker)** — The GPU worker backend that processes jobs created by this extension. It claims jobs from the YAML manifest, executes TTS/ASR training and inference, and uploads results back to GitLab.
 
 ## License
