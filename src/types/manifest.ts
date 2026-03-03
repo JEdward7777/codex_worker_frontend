@@ -4,6 +4,11 @@
  */
 
 /**
+ * Supported job types
+ */
+export type JobType = 'tts' | 'asr';
+
+/**
  * Job mode types
  */
 export type JobMode = 'training' | 'inference' | 'training_and_inference';
@@ -19,10 +24,20 @@ export type JobState = 'pending' | 'running' | 'completed' | 'failed' | 'cancele
 export type TTSModelType = 'StableTTS';
 
 /**
+ * ASR model types (extensible for future models)
+ */
+export type ASRModelType = 'W2V2BERT';
+
+/**
+ * Union of all model types across job types
+ */
+export type ModelType = TTSModelType | ASRModelType;
+
+/**
  * Model configuration for a job
  */
 export interface ModelConfig {
-    type: TTSModelType;
+    type: ModelType;
     base_checkpoint?: string; // Optional path or ID for extending existing model
 }
 
@@ -43,20 +58,28 @@ export interface InferenceConfig {
 }
 
 /**
+ * SentenceTransmorgrifier configuration (ASR post-processing)
+ */
+export interface TransmorgrifierConfig {
+    enabled: boolean; // Whether to use SentenceTransmorgrifier post-processing
+}
+
+/**
  * Individual job definition
  */
 export interface Job {
     job_id: string; // Random unique ID
     name?: string; // Optional human-readable name for the job
     description?: string; // Optional description of the job's purpose
-    job_type: 'tts'; // Extensible for future job types
+    job_type: JobType; // 'tts' or 'asr'
     mode: JobMode;
     submitted_at: string; // ISO 8601 timestamp of when the job was defined
     model: ModelConfig;
     epochs?: number; // Optional, for training
     training?: TrainingConfig; // Optional, for training mode
     inference?: InferenceConfig; // Optional, for inference mode
-    voice_reference?: string; // Optional audio file reference
+    voice_reference?: string; // Optional audio file reference (TTS only)
+    transmorgrifier?: TransmorgrifierConfig; // Optional ASR post-processing config
     timeout?: string; // ISO 8601 timestamp, optional
     canceled?: boolean; // User-signaled cancellation
 }

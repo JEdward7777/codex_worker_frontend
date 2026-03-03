@@ -331,8 +331,9 @@ export class ManifestService {
             throw new Error(`${prefix}: job_id must be a non-empty string`);
         }
 
-        if (job.job_type !== 'tts') {
-            throw new Error(`${prefix}: job_type must be 'tts'`);
+        const validJobTypes = ['tts', 'asr'];
+        if (!validJobTypes.includes(job.job_type)) {
+            throw new Error(`${prefix}: job_type must be one of ${validJobTypes.join(', ')}`);
         }
 
         const validModes = ['training', 'inference', 'training_and_inference'];

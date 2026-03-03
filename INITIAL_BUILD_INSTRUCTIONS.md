@@ -115,11 +115,11 @@ jobs:
   - job_id: <random unique ID>
     name: <optional human-readable name>
     description: <optional description of the job's purpose>
-    job_type: tts
+    job_type: tts | asr
     mode: training | inference | training_and_inference
     submitted_at: <ISO 8601 timestamp>
     model:
-      type: <tts model type>
+      type: <model type — StableTTS for TTS, W2V2BERT for ASR>
       base_checkpoint: <optional path or ID>
     epochs: <int, optional>
     training:
@@ -128,7 +128,9 @@ jobs:
     inference:
       include_verses: <optional list>
       exclude_verses: <optional list>
-    voice_reference: <optional audio file reference>
+    voice_reference: <optional audio file reference — TTS only>
+    transmorgrifier:
+      enabled: <boolean — ASR only, optional>
     timeout: <timestamp, optional>
     canceled: <boolean>
 ```
@@ -301,11 +303,67 @@ If any check fails:
 
 * Manifest must support:
 
-  * Multiple job types (TTS now, others later)
-  * Multiple TTS model types
+  * Multiple job types (TTS, ASR, and others later)
+  * Multiple model types per job type
 * UI should not hard-code assumptions that prevent new job types
 * Avoid unnecessary abstraction beyond manifest extensibility
 * Manifest `version` allows future breaking changes
+
+---
+
+## ASR (Automatic Speech Recognition) Job Type
+
+### Overview
+
+ASR jobs convert audio recordings into text. The worker uses the **W2V2BERT** model for speech recognition.
+
+### Job Type & Model
+
+* `job_type: asr`
+* `model.type: W2V2BERT`
+
+### Modes
+
+ASR supports the same three modes as TTS:
+
+* `training` — Train a W2V2BERT model on audio/text pairs
+* `inference` — Run speech recognition on audio to produce text
+* `training_and_inference` — Train first, then run inference
+
+### ASR-Specific Manifest Fields
+
+#### `transmorgrifier`
+
+Optional post-processing configuration for ASR inference. When enabled, the worker applies the SentenceTransmorgrifier to clean up raw ASR output.
+
+```yaml
+transmorgrifier:
+  enabled: true
+```
+
+* Only relevant for ASR jobs with inference (mode `inference` or `training_and_inference`)
+* Omitted or `enabled: false` means no post-processing
+* The plugin presents this as a yes/no option during ASR job creation for modes that include inference
+
+### Fields NOT Used by ASR
+
+* `voice_reference` — TTS-only; not included in ASR job manifests
+
+### Preflight Checks
+
+ASR jobs use the same preflight thresholds as TTS:
+
+* **Error** if 0 audio recordings found (training modes)
+* **Warning** if fewer than 50 audio recordings (training modes)
+* Inference mode requires a base checkpoint
+
+### UI Differences
+
+* Sidebar icon: `mic` (microphone) for ASR jobs vs `megaphone` for TTS
+* Sidebar description format: `ASR-training`, `ASR-inference`, etc.
+* Job type selection step replaces model type selection (since each job type currently has exactly one model)
+* Voice reference step is skipped for ASR jobs
+* SentenceTransmorgrifier option is shown for ASR jobs with inference
 
 ---
 

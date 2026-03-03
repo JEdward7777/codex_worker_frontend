@@ -14,11 +14,20 @@ import {
     VerseSelectorItem,
     ConfirmationPageData,
 } from '../types/ui';
-import { JobMode, TTSModelType } from '../types/manifest';
+import { JobMode, JobType, ModelType } from '../types/manifest';
 import { AudioDiscoveryService } from '../services/AudioDiscoveryService';
 import { ManifestService } from '../services/ManifestService';
 import { WebviewUI } from './WebviewUI';
 import { PRIVACY_POLICY_VERSION, PRIVACY_CONSENT_KEY, PRIVACY_SUMMARY } from '../constants/privacy';
+
+/**
+ * Maps job type to its default (currently only) model type.
+ * When a job type gains multiple models, this becomes a selection step.
+ */
+const JOB_TYPE_MODEL_MAP: Record<JobType, ModelType> = {
+    tts: 'StableTTS',
+    asr: 'W2V2BERT',
+};
 
 /**
  * Optional pre-filled values that skip their corresponding wizard steps.
@@ -26,13 +35,15 @@ import { PRIVACY_POLICY_VERSION, PRIVACY_CONSENT_KEY, PRIVACY_SUMMARY } from '..
  * or "Run Inference") where some parameters are already known from context.
  */
 export interface WizardPresets {
+    /** Pre-selected job type — skips the job type selection step */
+    jobType?: JobType;
     /** Pre-selected job mode — skips the mode selection step */
     mode?: JobMode;
     /** Pre-selected model type — skips the model type selection step */
-    modelType?: TTSModelType;
+    modelType?: ModelType;
     /** Pre-selected base checkpoint — null means "train new", string means specific checkpoint */
     baseCheckpoint?: string | null;
-    /** Pre-selected voice reference — null means "use default" */
+    /** Pre-selected voice reference — null means "use default" (TTS only) */
     voiceReference?: string | null;
     /** Label shown in the panel title indicating context (e.g., "Further training from job abc123") */
     contextLabel?: string;
@@ -130,13 +141,16 @@ export class NewJobWizard {
         ui: WebviewUI,
         presets?: WizardPresets
     ): Promise<JobCreationParams | null> {
-        // Step 1: Select job mode — skip if preset
-        const mode = presets?.mode ?? await this.selectMode(ui);
-        if (!mode) { return null; }
+        // Step 1: Select job type (TTS vs ASR) — skip if preset
+        const jobType = presets?.jobType ?? await this.selectJobType(ui);
+        if (!jobType) { return null; }
 
-        // Step 2: Select model type — skip if preset
-        const modelType = presets?.modelType ?? await this.selectModelType(ui);
-        if (!modelType) { return null; }
+        // Derive model type from job type (each type currently has exactly one model)
+        const modelType = presets?.modelType ?? JOB_TYPE_MODEL_MAP[jobType];
+
+        // Step 2: Select job mode — skip if preset
+        const mode = presets?.mode ?? await this.selectMode(ui, jobType);
+        if (!mode) { return null; }
 
         // Step 3: Select base checkpoint — skip if preset
         let currentMode = mode;
@@ -206,15 +220,22 @@ export class NewJobWizard {
             inferenceExcludeVerses = selection.exclude;
         }
 
-        // Step 6: Select voice reference — only for inference modes, skip if preset
+        // Step 6: Voice reference — TTS inference only, skip for ASR
         let voiceReference: string | null | undefined;
-        if (currentMode === 'inference' || currentMode === 'training_and_inference') {
+        if (jobType === 'tts' && (currentMode === 'inference' || currentMode === 'training_and_inference')) {
             if (presets?.voiceReference !== undefined) {
                 voiceReference = presets.voiceReference;
             } else {
                 voiceReference = await this.selectVoiceReference(ui);
                 if (voiceReference === undefined) { return null; }
             }
+        }
+
+        // Step 6b: SentenceTransmorgrifier option — ASR training modes only
+        let transmorgrifierEnabled: boolean | undefined;
+        if (jobType === 'asr' && (currentMode === 'training' || currentMode === 'training_and_inference')) {
+            transmorgrifierEnabled = await this.selectTransmorgrifier(ui);
+            if (transmorgrifierEnabled === undefined) { return null; }
         }
 
         // Step 7: Enter optional job name
@@ -230,6 +251,7 @@ export class NewJobWizard {
         }
 
         return {
+            jobType,
             name: jobName || undefined,
             description: jobDescription || undefined,
             mode: currentMode,
@@ -241,6 +263,7 @@ export class NewJobWizard {
             trainingIncludeVerses,
             trainingExcludeVerses,
             voiceReference: voiceReference || undefined,
+            transmorgrifierEnabled,
         };
     }
 
@@ -249,24 +272,69 @@ export class NewJobWizard {
     // ================================================================
 
     /**
-     * Step 1: Select job mode
+     * Step 1: Select job type (TTS vs ASR)
+     * Replaces the old model type step — each job type currently has exactly
+     * one model, so the model is implicitly selected.
      */
-    private async selectMode(ui: WebviewUI): Promise<JobMode | null> {
+    private async selectJobType(ui: WebviewUI): Promise<JobType | null> {
+        const items: WebviewQuickPickItem[] = [
+            {
+                label: 'Text-to-Speech (TTS)',
+                description: 'StableTTS model',
+                detail: 'Generate audio from text — train a voice model and synthesize speech',
+            },
+            {
+                label: 'Speech Recognition (ASR)',
+                description: 'W2V2-BERT model',
+                detail: 'Transcribe audio to text — train a recognition model and generate transcriptions',
+            },
+        ];
+
+        const selected = await ui.showQuickPick(items, {
+            title: 'Select Job Type',
+            placeHolder: 'What kind of job would you like to create?',
+        });
+
+        if (!selected) { return null; }
+
+        if (selected.label.includes('TTS')) { return 'tts'; }
+        if (selected.label.includes('ASR')) { return 'asr'; }
+        return null;
+    }
+
+    /**
+     * Step 2: Select job mode (job-type-aware descriptions)
+     */
+    private async selectMode(ui: WebviewUI, jobType: JobType): Promise<JobMode | null> {
+        const isTTS = jobType === 'tts';
+
         const items: WebviewQuickPickItem[] = [
             {
                 label: 'Training',
-                description: 'Train a new TTS model',
-                detail: 'Creates a new model or fine-tunes an existing one',
+                description: isTTS
+                    ? 'Train a new TTS model'
+                    : 'Train a new ASR model',
+                detail: isTTS
+                    ? 'Creates a new model or fine-tunes an existing one'
+                    : 'Creates a new speech recognition model or fine-tunes an existing one',
             },
             {
                 label: 'Inference',
-                description: 'Generate audio from text',
-                detail: 'Uses an existing model to synthesize speech',
+                description: isTTS
+                    ? 'Generate audio from text'
+                    : 'Transcribe audio to text',
+                detail: isTTS
+                    ? 'Uses an existing model to synthesize speech'
+                    : 'Uses an existing model to generate text from audio recordings',
             },
             {
                 label: 'Training and Inference',
-                description: 'Train then generate audio',
-                detail: 'Trains a model and then runs inference on selected verses',
+                description: isTTS
+                    ? 'Train then generate audio'
+                    : 'Train then transcribe',
+                detail: isTTS
+                    ? 'Trains a model and then runs inference on selected verses'
+                    : 'Trains a model and then transcribes audio on selected verses',
             },
         ];
 
@@ -284,27 +352,6 @@ export class NewJobWizard {
         };
 
         return modeMap[selected.label] || null;
-    }
-
-    /**
-     * Step 2: Select model type
-     */
-    private async selectModelType(ui: WebviewUI): Promise<TTSModelType | null> {
-        const items: WebviewQuickPickItem[] = [
-            {
-                label: 'StableTTS',
-                description: 'Stable Text-to-Speech model',
-                detail: 'High-quality TTS with good stability',
-            },
-        ];
-
-        const selected = await ui.showQuickPick(items, {
-            title: 'Select Model Type',
-            placeHolder: 'Which TTS model would you like to use?',
-        });
-
-        if (!selected) { return null; }
-        return selected.label as TTSModelType;
     }
 
     /**
@@ -509,7 +556,34 @@ export class NewJobWizard {
     }
 
     /**
-     * Step 6: Select voice reference (optional)
+     * Step 6b: SentenceTransmorgrifier option (ASR training only)
+     * Returns: true (enabled), false (disabled), or undefined (canceled)
+     */
+    private async selectTransmorgrifier(ui: WebviewUI): Promise<boolean | undefined> {
+        const items: WebviewQuickPickItem[] = [
+            {
+                label: 'Enable SentenceTransmorgrifier',
+                description: 'Recommended — improves transcription quality',
+                detail: 'Post-processes ASR output to fix capitalization, punctuation, and formatting',
+            },
+            {
+                label: 'Disable SentenceTransmorgrifier',
+                description: 'Skip post-processing',
+                detail: 'Use raw ASR output without additional formatting',
+            },
+        ];
+
+        const selected = await ui.showQuickPick(items, {
+            title: 'SentenceTransmorgrifier',
+            placeHolder: 'Enable post-processing for ASR output?',
+        });
+
+        if (!selected) { return undefined; }
+        return selected.label.includes('Enable');
+    }
+
+    /**
+     * Step 6: Select voice reference (optional, TTS only)
      */
     private async selectVoiceReference(ui: WebviewUI): Promise<string | null | undefined> {
         const items: WebviewQuickPickItem[] = [
@@ -699,6 +773,7 @@ export class NewJobWizard {
         totalVerses: number
     ): ConfirmationPageData {
         const data: ConfirmationPageData = {
+            jobType: params.jobType,
             name: params.name,
             description: params.description,
             mode: params.mode,
@@ -706,6 +781,7 @@ export class NewJobWizard {
             baseCheckpoint: params.baseCheckpoint,
             epochs: params.epochs,
             voiceReference: params.voiceReference,
+            transmorgrifierEnabled: params.transmorgrifierEnabled,
             audioStats: preflight.audioStats,
             warnings: preflight.warnings,
             errors: preflight.errors,

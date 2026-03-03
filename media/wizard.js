@@ -806,6 +806,7 @@
         configTitle.textContent = 'Configuration';
         configSection.appendChild(configTitle);
 
+        addRow(configSection, 'Job Type', formatJobType(data.jobType));
         addRow(configSection, 'Mode', formatMode(data.mode));
         addRow(configSection, 'Model', data.modelType);
 
@@ -821,6 +822,10 @@
 
         if (data.voiceReference) {
             addRow(configSection, 'Voice Reference', data.voiceReference);
+        }
+
+        if (data.transmorgrifierEnabled !== undefined && data.transmorgrifierEnabled !== null) {
+            addRow(configSection, 'SentenceTransmorgrifier', data.transmorgrifierEnabled ? 'Enabled' : 'Disabled');
         }
 
         container.appendChild(configSection);
@@ -1041,9 +1046,9 @@
         configTitle.textContent = 'Configuration';
         configSection.appendChild(configTitle);
 
+        addRow(configSection, 'Job Type', formatJobType(data.jobType));
         addRow(configSection, 'Mode', formatMode(data.mode));
         addRow(configSection, 'Model', data.modelType);
-        addRow(configSection, 'Job Type', data.jobType);
 
         if (data.baseCheckpoint) {
             addRow(configSection, 'Base Checkpoint', data.baseCheckpoint);
@@ -1797,6 +1802,19 @@
         row.appendChild(valueEl);
 
         parent.appendChild(row);
+    }
+
+    /**
+     * Format a job type string for display
+     * @param {string} jobType
+     * @returns {string}
+     */
+    function formatJobType(jobType) {
+        switch (jobType) {
+            case 'tts': return 'Text-to-Speech (TTS)';
+            case 'asr': return 'Speech Recognition (ASR)';
+            default: return jobType ? jobType.toUpperCase() : 'Unknown';
+        }
     }
 
     /**

@@ -9,7 +9,7 @@ import { JobTreeDataProvider, JobTreeItem } from './ui/JobTreeDataProvider';
 import { NewJobWizard, WizardPresets } from './ui/NewJobWizard';
 import { JobDetailPanel } from './ui/JobDetailPanel';
 import { JobCreationParams } from './types/ui';
-import { TTSModelType, JobMode } from './types/manifest';
+import { JobType, ModelType, JobMode } from './types/manifest';
 
 // Global service instances
 let gitLabService: GitLabService;
@@ -273,17 +273,20 @@ export function activate(context: vscode.ExtensionContext) {
 			job_id: jobId,
 			name: jobParams.name,
 			description: jobParams.description,
-			job_type: 'tts' as const,
+			job_type: jobParams.jobType,
 			mode: jobParams.mode,
 			submitted_at: new Date().toISOString(),
 			model: {
-				type: jobParams.modelType as 'StableTTS',
+				type: jobParams.modelType as ModelType,
 				base_checkpoint: jobParams.baseCheckpoint
 			},
 			epochs: jobParams.epochs,
 			training: trainingConfig,
 			inference: inferenceConfig,
-			voice_reference: jobParams.voiceReference,
+			voice_reference: jobParams.jobType === 'tts' ? jobParams.voiceReference : undefined,
+			transmorgrifier: jobParams.transmorgrifierEnabled !== undefined
+				? { enabled: jobParams.transmorgrifierEnabled }
+				: undefined,
 			canceled: false
 		};
 
@@ -401,8 +404,9 @@ export function activate(context: vscode.ExtensionContext) {
 				try {
 					const jobLabel = result.job.name || result.job.job_id;
 						const presets: WizardPresets = {
+							jobType: result.job.job_type as JobType,
 							mode: 'training',
-							modelType: result.job.model.type as TTSModelType,
+							modelType: result.job.model.type as ModelType,
 							baseCheckpoint: result.checkpointPath ?? null,
 							contextLabel: `Further training from ${jobLabel}`,
 						};
@@ -419,8 +423,9 @@ export function activate(context: vscode.ExtensionContext) {
 				try {
 					const jobLabel = result.job.name || result.job.job_id;
 						const presets: WizardPresets = {
+							jobType: result.job.job_type as JobType,
 							mode: 'inference',
-							modelType: result.job.model.type as TTSModelType,
+							modelType: result.job.model.type as ModelType,
 							baseCheckpoint: result.checkpointPath ?? null,
 							contextLabel: `Inference using model from ${jobLabel}`,
 						};
@@ -439,8 +444,9 @@ export function activate(context: vscode.ExtensionContext) {
 					const job = result.job;
 						const jobLabel = job.name || job.job_id;
 						const presets: WizardPresets = {
+							jobType: job.job_type as JobType,
 							mode: job.mode as JobMode,
-							modelType: job.model.type as TTSModelType,
+							modelType: job.model.type as ModelType,
 							baseCheckpoint: job.model.base_checkpoint ?? null,
 							voiceReference: job.voice_reference ?? null,
 							contextLabel: `Clone of ${jobLabel}`,

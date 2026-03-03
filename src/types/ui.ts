@@ -2,7 +2,7 @@
  * UI-related type definitions for the GPU Jobs extension
  */
 
-import { JobState } from './manifest';
+import { JobState, JobType } from './manifest';
 
 /**
  * Extended job information for UI display
@@ -27,6 +27,7 @@ export interface JobDisplayInfo {
  * Job creation parameters from the UI wizard
  */
 export interface JobCreationParams {
+    jobType: JobType;
     name?: string;
     description?: string;
     mode: 'training' | 'inference' | 'training_and_inference';
@@ -38,6 +39,7 @@ export interface JobCreationParams {
     trainingIncludeVerses?: string[];
     trainingExcludeVerses?: string[];
     voiceReference?: string;
+    transmorgrifierEnabled?: boolean; // ASR post-processing option
     timeout?: string;
 }
 
@@ -59,6 +61,7 @@ export interface PreflightCheckResult {
  * Job confirmation data shown before submission
  */
 export interface JobConfirmationData {
+    jobType: JobType;
     mode: string;
     modelType: string;
     baseCheckpoint?: string;
@@ -70,6 +73,7 @@ export interface JobConfirmationData {
     inferenceExcludeVerses?: string[];
     trainingIncludeVerses?: string[];
     trainingExcludeVerses?: string[];
+    transmorgrifierEnabled?: boolean;
     warnings: string[];
 }
 
@@ -132,6 +136,7 @@ export interface VerseSelectionResult {
  * Data sent to the confirmation page
  */
 export interface ConfirmationPageData {
+    jobType: JobType;
     name?: string;
     description?: string;
     mode: string;
@@ -139,6 +144,7 @@ export interface ConfirmationPageData {
     baseCheckpoint?: string;
     epochs?: number;
     voiceReference?: string;
+    transmorgrifierEnabled?: boolean;
     trainingSelection?: {
         type: 'all' | 'include' | 'exclude';
         count?: number;

@@ -1,1 +1,7822 @@
-(()=>{"use strict";var e={23(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.GitLabService=void 0;const a=s(n(398)),c=s(n(896)),l=s(n(928));class u{static DEFAULT_GITLAB_URL="https://git.genesisrnd.com";static DEFAULT_WORKER_USER_ID=551;static DEVELOPER_ACCESS_LEVEL=30;frontierAPI=null;async initialize(){const e=a.extensions.getExtension("frontier-rnd.frontier-authentication");if(!e)throw new Error("Frontier Authentication plugin is not installed. Please install it to use GPU jobs.");if(this.frontierAPI=await e.activate(),!this.frontierAPI)throw new Error("Failed to activate Frontier Authentication plugin.")}async getToken(){return this.frontierAPI||await this.initialize(),this.frontierAPI.gitLabService.getToken()}getBaseUrl(){if(!this.frontierAPI)throw new Error("GitLab service not initialized");return this.frontierAPI.gitLabService.getBaseUrl()}getWorkerUserId(){return a.workspace.getConfiguration("codex-worker").get("workerUserId",u.DEFAULT_WORKER_USER_ID)}async getProjectIdFromWorkspace(){const e=a.workspace.workspaceFolders;if(!e||0===e.length)return null;const t=e[0].uri.fsPath,n=l.join(t,".git","config");if(!c.existsSync(n))return null;const i=c.readFileSync(n,"utf-8").match(/\[remote "origin"\]([\s\S]*?)(?=\[|$)/);if(!i)return null;const o=i[1].match(/url\s*=\s*(.+)/);if(!o)return null;const r=o[1].trim();let s=null;if(r.startsWith("https://")){const e=r.match(/https:\/\/[^\/]+\/(.+?)(?:\.git)?$/);e&&(s=e[1])}else if(r.startsWith("git@")){const e=r.match(/git@[^:]+:(.+?)(?:\.git)?$/);e&&(s=e[1])}return s?encodeURIComponent(s):null}async shareProjectWithWorker(){const e=await this.getProjectIdFromWorkspace();if(!e)throw new Error("No GitLab remote found. Please push your project to GitLab before creating GPU jobs.");const t=await this.getToken(),n=this.getBaseUrl(),i=this.getWorkerUserId(),o=`${n}/api/v4/projects/${e}/members`,r=await fetch(o,{method:"POST",headers:{Authorization:`Bearer ${t}`,"Content-Type":"application/json"},body:JSON.stringify({user_id:i,access_level:u.DEVELOPER_ACCESS_LEVEL})});if(!r.ok){if(409===r.status)return void console.log("Worker is already a member of this project");const e=await r.text();throw new Error(`Failed to share project with worker: ${r.status} ${r.statusText}\n${e}`)}console.log("Successfully shared project with GPU worker")}async unshareProjectFromWorker(){const e=await this.getProjectIdFromWorkspace();if(!e)return void console.log("No GitLab remote found, nothing to unshare");const t=await this.getToken(),n=`${this.getBaseUrl()}/api/v4/projects/${e}/members/${this.getWorkerUserId()}`,i=await fetch(n,{method:"DELETE",headers:{Authorization:`Bearer ${t}`}});if(!i.ok){if(404===i.status)return void console.log("Worker is not a member of this project");const e=await i.text();throw new Error(`Failed to unshare project from worker: ${i.status} ${i.statusText}\n${e}`)}console.log("Successfully unshared project from GPU worker")}async isWorkerMember(){const e=await this.getProjectIdFromWorkspace();if(!e)return!1;const t=await this.getToken(),n=`${this.getBaseUrl()}/api/v4/projects/${e}/members/${this.getWorkerUserId()}`;return(await fetch(n,{method:"GET",headers:{Authorization:`Bearer ${t}`}})).ok}async verifyConnection(){try{const e=await this.getToken(),t=`${this.getBaseUrl()}/api/v4/user`;return(await fetch(t,{method:"GET",headers:{Authorization:`Bearer ${e}`}})).ok}catch(e){return console.error("GitLab connection verification failed:",e),!1}}}t.GitLabService=u},83(e,t,n){var i=n(433);function o(e,t,n,i,o){var r="",s="",a=Math.floor(o/2)-1;return i-t>a&&(t=i-a+(r=" ... ").length),n-i>a&&(n=i+a-(s=" ...").length),{str:r+e.slice(t,n).replace(/\t/g,"→")+s,pos:i-t+r.length}}function r(e,t){return i.repeat(" ",t-e.length)+e}e.exports=function(e,t){if(t=Object.create(t||null),!e.buffer)return null;t.maxLength||(t.maxLength=79),"number"!=typeof t.indent&&(t.indent=1),"number"!=typeof t.linesBefore&&(t.linesBefore=3),"number"!=typeof t.linesAfter&&(t.linesAfter=2);for(var n,s=/\r?\n|\r|\0/g,a=[0],c=[],l=-1;n=s.exec(e.buffer);)c.push(n.index),a.push(n.index+n[0].length),e.position<=n.index&&l<0&&(l=a.length-2);l<0&&(l=a.length-1);var u,d,p="",h=Math.min(e.line+t.linesAfter,c.length).toString().length,f=t.maxLength-(t.indent+h+3);for(u=1;u<=t.linesBefore&&!(l-u<0);u++)d=o(e.buffer,a[l-u],c[l-u],e.position-(a[l]-a[l-u]),f),p=i.repeat(" ",t.indent)+r((e.line-u+1).toString(),h)+" | "+d.str+"\n"+p;for(d=o(e.buffer,a[l],c[l],e.position,f),p+=i.repeat(" ",t.indent)+r((e.line+1).toString(),h)+" | "+d.str+"\n",p+=i.repeat("-",t.indent+h+3+d.pos)+"^\n",u=1;u<=t.linesAfter&&!(l+u>=c.length);u++)d=o(e.buffer,a[l+u],c[l+u],e.position-(a[l]-a[l+u]),f),p+=i.repeat(" ",t.indent)+r((e.line+u+1).toString(),h)+" | "+d.str+"\n";return p.replace(/\n$/,"")}},119(e,t,n){var i=n(231),o=n(388);function r(e,t){var n=[];return e[t].forEach(function(e){var t=n.length;n.forEach(function(n,i){n.tag===e.tag&&n.kind===e.kind&&n.multi===e.multi&&(t=i)}),n[t]=e}),n}function s(e){return this.extend(e)}s.prototype.extend=function(e){var t=[],n=[];if(e instanceof o)n.push(e);else if(Array.isArray(e))n=n.concat(e);else{if(!e||!Array.isArray(e.implicit)&&!Array.isArray(e.explicit))throw new i("Schema.extend argument should be a Type, [ Type ], or a schema definition ({ implicit: [...], explicit: [...] })");e.implicit&&(t=t.concat(e.implicit)),e.explicit&&(n=n.concat(e.explicit))}t.forEach(function(e){if(!(e instanceof o))throw new i("Specified list of YAML types (or a single Type object) contains a non-Type object.");if(e.loadKind&&"scalar"!==e.loadKind)throw new i("There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.");if(e.multi)throw new i("There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.")}),n.forEach(function(e){if(!(e instanceof o))throw new i("Specified list of YAML types (or a single Type object) contains a non-Type object.")});var a=Object.create(s.prototype);return a.implicit=(this.implicit||[]).concat(t),a.explicit=(this.explicit||[]).concat(n),a.compiledImplicit=r(a,"implicit"),a.compiledExplicit=r(a,"explicit"),a.compiledTypeMap=function(){var e,t,n={scalar:{},sequence:{},mapping:{},fallback:{},multi:{scalar:[],sequence:[],mapping:[],fallback:[]}};function i(e){e.multi?(n.multi[e.kind].push(e),n.multi.fallback.push(e)):n[e.kind][e.tag]=n.fallback[e.tag]=e}for(e=0,t=arguments.length;e<t;e+=1)arguments[e].forEach(i);return n}(a.compiledImplicit,a.compiledExplicit),a},e.exports=s},127(e,t,n){var i=n(388),o=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$"),r=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9]?)-([0-9][0-9]?)(?:[Tt]|[ \\t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\\.([0-9]*))?(?:[ \\t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?$");e.exports=new i("tag:yaml.org,2002:timestamp",{kind:"scalar",resolve:function(e){return null!==e&&(null!==o.exec(e)||null!==r.exec(e))},construct:function(e){var t,n,i,s,a,c,l,u,d=0,p=null;if(null===(t=o.exec(e))&&(t=r.exec(e)),null===t)throw new Error("Date resolve error");if(n=+t[1],i=+t[2]-1,s=+t[3],!t[4])return new Date(Date.UTC(n,i,s));if(a=+t[4],c=+t[5],l=+t[6],t[7]){for(d=t[7].slice(0,3);d.length<3;)d+="0";d=+d}return t[9]&&(p=6e4*(60*+t[10]+ +(t[11]||0)),"-"===t[9]&&(p=-p)),u=new Date(Date.UTC(n,i,s,a,c,l,d)),p&&u.setTime(u.getTime()-p),u},instanceOf:Date,represent:function(e){return e.toISOString()}})},184(e,t,n){e.exports=n(759).extend({implicit:[n(198),n(199),n(466),n(461)]})},193(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.JobTreeDataProvider=t.JobTreeItem=void 0;const a=s(n(398));class c extends a.TreeItem{job;collapsibleState;constructor(e,t){super(e.name||e.job_id,t),this.job=e,this.collapsibleState=t,this.tooltip=this.buildTooltip(),this.description=this.buildDescription(),this.iconPath=this.getIconForState(e.state),this.contextValue=this.getContextValue(),this.command={command:"codex-worker.viewJobDetail",title:"View Job Details",arguments:[this]}}static formatTimestamp(e){const t=new Date(e);return isNaN(t.getTime())?e:t.toLocaleString()}buildTooltip(){const e=[];if(this.job.name&&e.push(`Name: ${this.job.name}`),this.job.description&&e.push(`Description: ${this.job.description}`),e.push(`Job ID: ${this.job.job_id}`,`Type: ${this.job.job_type}`,`Mode: ${this.job.mode}`,`State: ${this.job.state}`,`Model: ${this.job.model.type}`),this.job.model.base_checkpoint&&e.push(`Base: ${this.job.model.base_checkpoint}`),this.job.submitted_at&&e.push(`Submitted: ${c.formatTimestamp(this.job.submitted_at)}`),this.job.response_timestamp){const t="completed"===this.job.state||"failed"===this.job.state||"canceled"===this.job.state?"Completed":"Last Update";e.push(`${t}: ${c.formatTimestamp(this.job.response_timestamp)}`)}if(this.job.epochs){const t=this.job.epochs_completed?`${this.job.epochs_completed}/${this.job.epochs}`:`0/${this.job.epochs}`;e.push(`Epochs: ${t}`)}return this.job.worker_id&&e.push(`Worker: ${this.job.worker_id}`),this.job.inference&&(this.job.inference.include_verses&&e.push(`Include: ${this.job.inference.include_verses.length} verses`),this.job.inference.exclude_verses&&e.push(`Exclude: ${this.job.inference.exclude_verses.length} verses`)),this.job.error_message&&e.push(`Error: ${this.job.error_message}`),this.job.canceled&&e.push("⚠️ Canceled by user"),e.join("\n")}buildDescription(){const e=[];if(e.push(this.getStateEmoji(this.job.state)),this.job.worker_id&&e.push(`Worker: ${this.job.worker_id}`),this.job.epochs&&"running"===this.job.state){const t=this.job.epochs_completed||0;e.push(`${t}/${this.job.epochs} epochs`)}return e.push(this.job.mode),e.join(" • ")}getStateEmoji(e){switch(e){case"pending":return"⏳";case"running":return"▶️";case"completed":return"✅";case"failed":return"❌";case"canceled":return"🚫";default:return"❓"}}getIconForState(e){switch(e){case"pending":return new a.ThemeIcon("clock",new a.ThemeColor("charts.yellow"));case"running":return new a.ThemeIcon("play",new a.ThemeColor("charts.blue"));case"completed":return new a.ThemeIcon("check",new a.ThemeColor("charts.green"));case"failed":return new a.ThemeIcon("error",new a.ThemeColor("charts.red"));case"canceled":return new a.ThemeIcon("circle-slash",new a.ThemeColor("charts.gray"));default:return new a.ThemeIcon("question")}}getContextValue(){const e=["gpuJob"];return"pending"!==this.job.state&&"running"!==this.job.state||e.push("cancelable"),"completed"===this.job.state&&e.push("completed"),e.join(",")}}t.JobTreeItem=c,t.JobTreeDataProvider=class{workspaceRoot;manifestService;_onDidChangeTreeData=new a.EventEmitter;onDidChangeTreeData=this._onDidChangeTreeData.event;constructor(e,t){this.workspaceRoot=e,this.manifestService=t}dispose(){this._onDidChangeTreeData.dispose()}refresh(){this._onDidChangeTreeData.fire()}getTreeItem(e){return e}async getChildren(e){if(!this.workspaceRoot)return a.window.showInformationMessage("No workspace folder open"),[];if(e)return[];try{const e=await this.manifestService.getJobsWithState();return 0===e.length?[]:e.sort((e,t)=>{const n={running:0,pending:1,completed:2,failed:3,canceled:4},i=n[e.state]??5,o=n[t.state]??5;return i!==o?i-o:t.job_id.localeCompare(e.job_id)}).map(e=>new c(e,a.TreeItemCollapsibleState.None))}catch(e){const t=e instanceof Error?e.message:String(e);return a.window.showErrorMessage(`Failed to load jobs: ${t}`),[]}}async getActiveJobCount(){try{return(await this.manifestService.getJobsWithState()).filter(e=>"pending"===e.state||"running"===e.state).length}catch(e){return 0}}async hasRunningJobs(){try{return(await this.manifestService.getJobsWithState()).some(e=>"running"===e.state)}catch(e){return!1}}}},198(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:null",{kind:"scalar",resolve:function(e){if(null===e)return!0;var t=e.length;return 1===t&&"~"===e||4===t&&("null"===e||"Null"===e||"NULL"===e)},construct:function(){return null},predicate:function(e){return null===e},represent:{canonical:function(){return"~"},lowercase:function(){return"null"},uppercase:function(){return"NULL"},camelcase:function(){return"Null"},empty:function(){return""}},defaultStyle:"lowercase"})},199(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:bool",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t=e.length;return 4===t&&("true"===e||"True"===e||"TRUE"===e)||5===t&&("false"===e||"False"===e||"FALSE"===e)},construct:function(e){return"true"===e||"True"===e||"TRUE"===e},predicate:function(e){return"[object Boolean]"===Object.prototype.toString.call(e)},represent:{lowercase:function(e){return e?"true":"false"},uppercase:function(e){return e?"TRUE":"FALSE"},camelcase:function(e){return e?"True":"False"}},defaultStyle:"lowercase"})},210(e,t,n){var i=n(243),o=n(781);function r(e,t){return function(){throw new Error("Function yaml."+e+" is removed in js-yaml 4. Use yaml."+t+" instead, which is now safe by default.")}}e.exports.Type=n(388),e.exports.Schema=n(119),e.exports.FAILSAFE_SCHEMA=n(759),e.exports.JSON_SCHEMA=n(184),e.exports.CORE_SCHEMA=n(769),e.exports.DEFAULT_SCHEMA=n(489),e.exports.load=i.load,e.exports.loadAll=i.loadAll,e.exports.dump=o.dump,e.exports.YAMLException=n(231),e.exports.types={binary:n(342),float:n(461),map:n(369),null:n(198),pairs:n(942),set:n(663),timestamp:n(127),bool:n(199),int:n(466),merge:n(851),omap:n(946),seq:n(636),str:n(212)},e.exports.safeLoad=r("safeLoad","load"),e.exports.safeLoadAll=r("safeLoadAll","loadAll"),e.exports.safeDump=r("safeDump","dump")},212(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:str",{kind:"scalar",construct:function(e){return null!==e?e:""}})},231(e){function t(e,t){var n="",i=e.reason||"(unknown reason)";return e.mark?(e.mark.name&&(n+='in "'+e.mark.name+'" '),n+="("+(e.mark.line+1)+":"+(e.mark.column+1)+")",!t&&e.mark.snippet&&(n+="\n\n"+e.mark.snippet),i+" "+n):i}function n(e,n){Error.call(this),this.name="YAMLException",this.reason=e,this.mark=n,this.message=t(this,!1),Error.captureStackTrace?Error.captureStackTrace(this,this.constructor):this.stack=(new Error).stack||""}n.prototype=Object.create(Error.prototype),n.prototype.constructor=n,n.prototype.toString=function(e){return this.name+": "+t(this,e)},e.exports=n},243(e,t,n){var i=n(433),o=n(231),r=n(83),s=n(489),a=Object.prototype.hasOwnProperty,c=/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/,l=/[\x85\u2028\u2029]/,u=/[,\[\]\{\}]/,d=/^(?:!|!!|![a-z\-]+!)$/i,p=/^(?:!|[^,\[\]\{\}])(?:%[0-9a-f]{2}|[0-9a-z\-#;\/\?:@&=\+\$,_\.!~\*'\(\)\[\]])*$/i;function h(e){return Object.prototype.toString.call(e)}function f(e){return 10===e||13===e}function m(e){return 9===e||32===e}function g(e){return 9===e||32===e||10===e||13===e}function b(e){return 44===e||91===e||93===e||123===e||125===e}function w(e){var t;return 48<=e&&e<=57?e-48:97<=(t=32|e)&&t<=102?t-97+10:-1}function v(e){return 120===e?2:117===e?4:85===e?8:0}function y(e){return 48<=e&&e<=57?e-48:-1}function k(e){return 48===e?"\0":97===e?"":98===e?"\b":116===e||9===e?"\t":110===e?"\n":118===e?"\v":102===e?"\f":114===e?"\r":101===e?"":32===e?" ":34===e?'"':47===e?"/":92===e?"\\":78===e?"":95===e?" ":76===e?"\u2028":80===e?"\u2029":""}function j(e){return e<=65535?String.fromCharCode(e):String.fromCharCode(55296+(e-65536>>10),56320+(e-65536&1023))}function _(e,t,n){"__proto__"===t?Object.defineProperty(e,t,{configurable:!0,enumerable:!0,writable:!0,value:n}):e[t]=n}for(var x=new Array(256),A=new Array(256),I=0;I<256;I++)x[I]=k(I)?1:0,A[I]=k(I);function S(e,t){this.input=e,this.filename=t.filename||null,this.schema=t.schema||s,this.onWarning=t.onWarning||null,this.legacy=t.legacy||!1,this.json=t.json||!1,this.listener=t.listener||null,this.implicitTypes=this.schema.compiledImplicit,this.typeMap=this.schema.compiledTypeMap,this.length=e.length,this.position=0,this.line=0,this.lineStart=0,this.lineIndent=0,this.firstTabInLine=-1,this.documents=[]}function C(e,t){var n={name:e.filename,buffer:e.input.slice(0,-1),position:e.position,line:e.line,column:e.position-e.lineStart};return n.snippet=r(n),new o(t,n)}function M(e,t){throw C(e,t)}function T(e,t){e.onWarning&&e.onWarning.call(null,C(e,t))}var E={YAML:function(e,t,n){var i,o,r;null!==e.version&&M(e,"duplication of %YAML directive"),1!==n.length&&M(e,"YAML directive accepts exactly one argument"),null===(i=/^([0-9]+)\.([0-9]+)$/.exec(n[0]))&&M(e,"ill-formed argument of the YAML directive"),o=parseInt(i[1],10),r=parseInt(i[2],10),1!==o&&M(e,"unacceptable YAML version of the document"),e.version=n[0],e.checkLineBreaks=r<2,1!==r&&2!==r&&T(e,"unsupported YAML version of the document")},TAG:function(e,t,n){var i,o;2!==n.length&&M(e,"TAG directive accepts exactly two arguments"),i=n[0],o=n[1],d.test(i)||M(e,"ill-formed tag handle (first argument) of the TAG directive"),a.call(e.tagMap,i)&&M(e,'there is a previously declared suffix for "'+i+'" tag handle'),p.test(o)||M(e,"ill-formed tag prefix (second argument) of the TAG directive");try{o=decodeURIComponent(o)}catch(t){M(e,"tag prefix is malformed: "+o)}e.tagMap[i]=o}};function O(e,t,n,i){var o,r,s,a;if(t<n){if(a=e.input.slice(t,n),i)for(o=0,r=a.length;o<r;o+=1)9===(s=a.charCodeAt(o))||32<=s&&s<=1114111||M(e,"expected valid JSON character");else c.test(a)&&M(e,"the stream contains non-printable characters");e.result+=a}}function P(e,t,n,o){var r,s,c,l;for(i.isObject(n)||M(e,"cannot merge mappings; the provided source object is unacceptable"),c=0,l=(r=Object.keys(n)).length;c<l;c+=1)s=r[c],a.call(t,s)||(_(t,s,n[s]),o[s]=!0)}function $(e,t,n,i,o,r,s,c,l){var u,d;if(Array.isArray(o))for(u=0,d=(o=Array.prototype.slice.call(o)).length;u<d;u+=1)Array.isArray(o[u])&&M(e,"nested arrays are not supported inside keys"),"object"==typeof o&&"[object Object]"===h(o[u])&&(o[u]="[object Object]");if("object"==typeof o&&"[object Object]"===h(o)&&(o="[object Object]"),o=String(o),null===t&&(t={}),"tag:yaml.org,2002:merge"===i)if(Array.isArray(r))for(u=0,d=r.length;u<d;u+=1)P(e,t,r[u],n);else P(e,t,r,n);else e.json||a.call(n,o)||!a.call(t,o)||(e.line=s||e.line,e.lineStart=c||e.lineStart,e.position=l||e.position,M(e,"duplicated mapping key")),_(t,o,r),delete n[o];return t}function N(e){var t;10===(t=e.input.charCodeAt(e.position))?e.position++:13===t?(e.position++,10===e.input.charCodeAt(e.position)&&e.position++):M(e,"a line break is expected"),e.line+=1,e.lineStart=e.position,e.firstTabInLine=-1}function F(e,t,n){for(var i=0,o=e.input.charCodeAt(e.position);0!==o;){for(;m(o);)9===o&&-1===e.firstTabInLine&&(e.firstTabInLine=e.position),o=e.input.charCodeAt(++e.position);if(t&&35===o)do{o=e.input.charCodeAt(++e.position)}while(10!==o&&13!==o&&0!==o);if(!f(o))break;for(N(e),o=e.input.charCodeAt(e.position),i++,e.lineIndent=0;32===o;)e.lineIndent++,o=e.input.charCodeAt(++e.position)}return-1!==n&&0!==i&&e.lineIndent<n&&T(e,"deficient indentation"),i}function R(e){var t,n=e.position;return!(45!==(t=e.input.charCodeAt(n))&&46!==t||t!==e.input.charCodeAt(n+1)||t!==e.input.charCodeAt(n+2)||(n+=3,0!==(t=e.input.charCodeAt(n))&&!g(t)))}function D(e,t){1===t?e.result+=" ":t>1&&(e.result+=i.repeat("\n",t-1))}function V(e,t){var n,i,o=e.tag,r=e.anchor,s=[],a=!1;if(-1!==e.firstTabInLine)return!1;for(null!==e.anchor&&(e.anchorMap[e.anchor]=s),i=e.input.charCodeAt(e.position);0!==i&&(-1!==e.firstTabInLine&&(e.position=e.firstTabInLine,M(e,"tab characters must not be used in indentation")),45===i)&&g(e.input.charCodeAt(e.position+1));)if(a=!0,e.position++,F(e,!0,-1)&&e.lineIndent<=t)s.push(null),i=e.input.charCodeAt(e.position);else if(n=e.line,J(e,t,3,!1,!0),s.push(e.result),F(e,!0,-1),i=e.input.charCodeAt(e.position),(e.line===n||e.lineIndent>t)&&0!==i)M(e,"bad indentation of a sequence entry");else if(e.lineIndent<t)break;return!!a&&(e.tag=o,e.anchor=r,e.kind="sequence",e.result=s,!0)}function L(e){var t,n,i,o,r=!1,s=!1;if(33!==(o=e.input.charCodeAt(e.position)))return!1;if(null!==e.tag&&M(e,"duplication of a tag property"),60===(o=e.input.charCodeAt(++e.position))?(r=!0,o=e.input.charCodeAt(++e.position)):33===o?(s=!0,n="!!",o=e.input.charCodeAt(++e.position)):n="!",t=e.position,r){do{o=e.input.charCodeAt(++e.position)}while(0!==o&&62!==o);e.position<e.length?(i=e.input.slice(t,e.position),o=e.input.charCodeAt(++e.position)):M(e,"unexpected end of the stream within a verbatim tag")}else{for(;0!==o&&!g(o);)33===o&&(s?M(e,"tag suffix cannot contain exclamation marks"):(n=e.input.slice(t-1,e.position+1),d.test(n)||M(e,"named tag handle cannot contain such characters"),s=!0,t=e.position+1)),o=e.input.charCodeAt(++e.position);i=e.input.slice(t,e.position),u.test(i)&&M(e,"tag suffix cannot contain flow indicator characters")}i&&!p.test(i)&&M(e,"tag name cannot contain such characters: "+i);try{i=decodeURIComponent(i)}catch(t){M(e,"tag name is malformed: "+i)}return r?e.tag=i:a.call(e.tagMap,n)?e.tag=e.tagMap[n]+i:"!"===n?e.tag="!"+i:"!!"===n?e.tag="tag:yaml.org,2002:"+i:M(e,'undeclared tag handle "'+n+'"'),!0}function W(e){var t,n;if(38!==(n=e.input.charCodeAt(e.position)))return!1;for(null!==e.anchor&&M(e,"duplication of an anchor property"),n=e.input.charCodeAt(++e.position),t=e.position;0!==n&&!g(n)&&!b(n);)n=e.input.charCodeAt(++e.position);return e.position===t&&M(e,"name of an anchor node must contain at least one character"),e.anchor=e.input.slice(t,e.position),!0}function J(e,t,n,o,r){var s,c,l,u,d,p,h,k,_,I=1,S=!1,C=!1;if(null!==e.listener&&e.listener("open",e),e.tag=null,e.anchor=null,e.kind=null,e.result=null,s=c=l=4===n||3===n,o&&F(e,!0,-1)&&(S=!0,e.lineIndent>t?I=1:e.lineIndent===t?I=0:e.lineIndent<t&&(I=-1)),1===I)for(;L(e)||W(e);)F(e,!0,-1)?(S=!0,l=s,e.lineIndent>t?I=1:e.lineIndent===t?I=0:e.lineIndent<t&&(I=-1)):l=!1;if(l&&(l=S||r),1!==I&&4!==n||(k=1===n||2===n?t:t+1,_=e.position-e.lineStart,1===I?l&&(V(e,_)||function(e,t,n){var i,o,r,s,a,c,l,u=e.tag,d=e.anchor,p={},h=Object.create(null),f=null,b=null,w=null,v=!1,y=!1;if(-1!==e.firstTabInLine)return!1;for(null!==e.anchor&&(e.anchorMap[e.anchor]=p),l=e.input.charCodeAt(e.position);0!==l;){if(v||-1===e.firstTabInLine||(e.position=e.firstTabInLine,M(e,"tab characters must not be used in indentation")),i=e.input.charCodeAt(e.position+1),r=e.line,63!==l&&58!==l||!g(i)){if(s=e.line,a=e.lineStart,c=e.position,!J(e,n,2,!1,!0))break;if(e.line===r){for(l=e.input.charCodeAt(e.position);m(l);)l=e.input.charCodeAt(++e.position);if(58===l)g(l=e.input.charCodeAt(++e.position))||M(e,"a whitespace character is expected after the key-value separator within a block mapping"),v&&($(e,p,h,f,b,null,s,a,c),f=b=w=null),y=!0,v=!1,o=!1,f=e.tag,b=e.result;else{if(!y)return e.tag=u,e.anchor=d,!0;M(e,"can not read an implicit mapping pair; a colon is missed")}}else{if(!y)return e.tag=u,e.anchor=d,!0;M(e,"can not read a block mapping entry; a multiline key may not be an implicit key")}}else 63===l?(v&&($(e,p,h,f,b,null,s,a,c),f=b=w=null),y=!0,v=!0,o=!0):v?(v=!1,o=!0):M(e,"incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line"),e.position+=1,l=i;if((e.line===r||e.lineIndent>t)&&(v&&(s=e.line,a=e.lineStart,c=e.position),J(e,t,4,!0,o)&&(v?b=e.result:w=e.result),v||($(e,p,h,f,b,w,s,a,c),f=b=w=null),F(e,!0,-1),l=e.input.charCodeAt(e.position)),(e.line===r||e.lineIndent>t)&&0!==l)M(e,"bad indentation of a mapping entry");else if(e.lineIndent<t)break}return v&&$(e,p,h,f,b,null,s,a,c),y&&(e.tag=u,e.anchor=d,e.kind="mapping",e.result=p),y}(e,_,k))||function(e,t){var n,i,o,r,s,a,c,l,u,d,p,h,f=!0,m=e.tag,b=e.anchor,w=Object.create(null);if(91===(h=e.input.charCodeAt(e.position)))s=93,l=!1,r=[];else{if(123!==h)return!1;s=125,l=!0,r={}}for(null!==e.anchor&&(e.anchorMap[e.anchor]=r),h=e.input.charCodeAt(++e.position);0!==h;){if(F(e,!0,t),(h=e.input.charCodeAt(e.position))===s)return e.position++,e.tag=m,e.anchor=b,e.kind=l?"mapping":"sequence",e.result=r,!0;f?44===h&&M(e,"expected the node content, but found ','"):M(e,"missed comma between flow collection entries"),p=null,a=c=!1,63===h&&g(e.input.charCodeAt(e.position+1))&&(a=c=!0,e.position++,F(e,!0,t)),n=e.line,i=e.lineStart,o=e.position,J(e,t,1,!1,!0),d=e.tag,u=e.result,F(e,!0,t),h=e.input.charCodeAt(e.position),!c&&e.line!==n||58!==h||(a=!0,h=e.input.charCodeAt(++e.position),F(e,!0,t),J(e,t,1,!1,!0),p=e.result),l?$(e,r,w,d,u,p,n,i,o):a?r.push($(e,null,w,d,u,p,n,i,o)):r.push(u),F(e,!0,t),44===(h=e.input.charCodeAt(e.position))?(f=!0,h=e.input.charCodeAt(++e.position)):f=!1}M(e,"unexpected end of the stream within a flow collection")}(e,k)?C=!0:(c&&function(e,t){var n,o,r,s,a=1,c=!1,l=!1,u=t,d=0,p=!1;if(124===(s=e.input.charCodeAt(e.position)))o=!1;else{if(62!==s)return!1;o=!0}for(e.kind="scalar",e.result="";0!==s;)if(43===(s=e.input.charCodeAt(++e.position))||45===s)1===a?a=43===s?3:2:M(e,"repeat of a chomping mode identifier");else{if(!((r=y(s))>=0))break;0===r?M(e,"bad explicit indentation width of a block scalar; it cannot be less than one"):l?M(e,"repeat of an indentation width identifier"):(u=t+r-1,l=!0)}if(m(s)){do{s=e.input.charCodeAt(++e.position)}while(m(s));if(35===s)do{s=e.input.charCodeAt(++e.position)}while(!f(s)&&0!==s)}for(;0!==s;){for(N(e),e.lineIndent=0,s=e.input.charCodeAt(e.position);(!l||e.lineIndent<u)&&32===s;)e.lineIndent++,s=e.input.charCodeAt(++e.position);if(!l&&e.lineIndent>u&&(u=e.lineIndent),f(s))d++;else{if(e.lineIndent<u){3===a?e.result+=i.repeat("\n",c?1+d:d):1===a&&c&&(e.result+="\n");break}for(o?m(s)?(p=!0,e.result+=i.repeat("\n",c?1+d:d)):p?(p=!1,e.result+=i.repeat("\n",d+1)):0===d?c&&(e.result+=" "):e.result+=i.repeat("\n",d):e.result+=i.repeat("\n",c?1+d:d),c=!0,l=!0,d=0,n=e.position;!f(s)&&0!==s;)s=e.input.charCodeAt(++e.position);O(e,n,e.position,!1)}}return!0}(e,k)||function(e,t){var n,i,o;if(39!==(n=e.input.charCodeAt(e.position)))return!1;for(e.kind="scalar",e.result="",e.position++,i=o=e.position;0!==(n=e.input.charCodeAt(e.position));)if(39===n){if(O(e,i,e.position,!0),39!==(n=e.input.charCodeAt(++e.position)))return!0;i=e.position,e.position++,o=e.position}else f(n)?(O(e,i,o,!0),D(e,F(e,!1,t)),i=o=e.position):e.position===e.lineStart&&R(e)?M(e,"unexpected end of the document within a single quoted scalar"):(e.position++,o=e.position);M(e,"unexpected end of the stream within a single quoted scalar")}(e,k)||function(e,t){var n,i,o,r,s,a;if(34!==(a=e.input.charCodeAt(e.position)))return!1;for(e.kind="scalar",e.result="",e.position++,n=i=e.position;0!==(a=e.input.charCodeAt(e.position));){if(34===a)return O(e,n,e.position,!0),e.position++,!0;if(92===a){if(O(e,n,e.position,!0),f(a=e.input.charCodeAt(++e.position)))F(e,!1,t);else if(a<256&&x[a])e.result+=A[a],e.position++;else if((s=v(a))>0){for(o=s,r=0;o>0;o--)(s=w(a=e.input.charCodeAt(++e.position)))>=0?r=(r<<4)+s:M(e,"expected hexadecimal character");e.result+=j(r),e.position++}else M(e,"unknown escape sequence");n=i=e.position}else f(a)?(O(e,n,i,!0),D(e,F(e,!1,t)),n=i=e.position):e.position===e.lineStart&&R(e)?M(e,"unexpected end of the document within a double quoted scalar"):(e.position++,i=e.position)}M(e,"unexpected end of the stream within a double quoted scalar")}(e,k)?C=!0:function(e){var t,n,i;if(42!==(i=e.input.charCodeAt(e.position)))return!1;for(i=e.input.charCodeAt(++e.position),t=e.position;0!==i&&!g(i)&&!b(i);)i=e.input.charCodeAt(++e.position);return e.position===t&&M(e,"name of an alias node must contain at least one character"),n=e.input.slice(t,e.position),a.call(e.anchorMap,n)||M(e,'unidentified alias "'+n+'"'),e.result=e.anchorMap[n],F(e,!0,-1),!0}(e)?(C=!0,null===e.tag&&null===e.anchor||M(e,"alias node should not have any properties")):function(e,t,n){var i,o,r,s,a,c,l,u,d=e.kind,p=e.result;if(g(u=e.input.charCodeAt(e.position))||b(u)||35===u||38===u||42===u||33===u||124===u||62===u||39===u||34===u||37===u||64===u||96===u)return!1;if((63===u||45===u)&&(g(i=e.input.charCodeAt(e.position+1))||n&&b(i)))return!1;for(e.kind="scalar",e.result="",o=r=e.position,s=!1;0!==u;){if(58===u){if(g(i=e.input.charCodeAt(e.position+1))||n&&b(i))break}else if(35===u){if(g(e.input.charCodeAt(e.position-1)))break}else{if(e.position===e.lineStart&&R(e)||n&&b(u))break;if(f(u)){if(a=e.line,c=e.lineStart,l=e.lineIndent,F(e,!1,-1),e.lineIndent>=t){s=!0,u=e.input.charCodeAt(e.position);continue}e.position=r,e.line=a,e.lineStart=c,e.lineIndent=l;break}}s&&(O(e,o,r,!1),D(e,e.line-a),o=r=e.position,s=!1),m(u)||(r=e.position+1),u=e.input.charCodeAt(++e.position)}return O(e,o,r,!1),!!e.result||(e.kind=d,e.result=p,!1)}(e,k,1===n)&&(C=!0,null===e.tag&&(e.tag="?")),null!==e.anchor&&(e.anchorMap[e.anchor]=e.result)):0===I&&(C=l&&V(e,_))),null===e.tag)null!==e.anchor&&(e.anchorMap[e.anchor]=e.result);else if("?"===e.tag){for(null!==e.result&&"scalar"!==e.kind&&M(e,'unacceptable node kind for !<?> tag; it should be "scalar", not "'+e.kind+'"'),u=0,d=e.implicitTypes.length;u<d;u+=1)if((h=e.implicitTypes[u]).resolve(e.result)){e.result=h.construct(e.result),e.tag=h.tag,null!==e.anchor&&(e.anchorMap[e.anchor]=e.result);break}}else if("!"!==e.tag){if(a.call(e.typeMap[e.kind||"fallback"],e.tag))h=e.typeMap[e.kind||"fallback"][e.tag];else for(h=null,u=0,d=(p=e.typeMap.multi[e.kind||"fallback"]).length;u<d;u+=1)if(e.tag.slice(0,p[u].tag.length)===p[u].tag){h=p[u];break}h||M(e,"unknown tag !<"+e.tag+">"),null!==e.result&&h.kind!==e.kind&&M(e,"unacceptable node kind for !<"+e.tag+'> tag; it should be "'+h.kind+'", not "'+e.kind+'"'),h.resolve(e.result,e.tag)?(e.result=h.construct(e.result,e.tag),null!==e.anchor&&(e.anchorMap[e.anchor]=e.result)):M(e,"cannot resolve a node with !<"+e.tag+"> explicit tag")}return null!==e.listener&&e.listener("close",e),null!==e.tag||null!==e.anchor||C}function U(e){var t,n,i,o,r=e.position,s=!1;for(e.version=null,e.checkLineBreaks=e.legacy,e.tagMap=Object.create(null),e.anchorMap=Object.create(null);0!==(o=e.input.charCodeAt(e.position))&&(F(e,!0,-1),o=e.input.charCodeAt(e.position),!(e.lineIndent>0||37!==o));){for(s=!0,o=e.input.charCodeAt(++e.position),t=e.position;0!==o&&!g(o);)o=e.input.charCodeAt(++e.position);for(i=[],(n=e.input.slice(t,e.position)).length<1&&M(e,"directive name must not be less than one character in length");0!==o;){for(;m(o);)o=e.input.charCodeAt(++e.position);if(35===o){do{o=e.input.charCodeAt(++e.position)}while(0!==o&&!f(o));break}if(f(o))break;for(t=e.position;0!==o&&!g(o);)o=e.input.charCodeAt(++e.position);i.push(e.input.slice(t,e.position))}0!==o&&N(e),a.call(E,n)?E[n](e,n,i):T(e,'unknown document directive "'+n+'"')}F(e,!0,-1),0===e.lineIndent&&45===e.input.charCodeAt(e.position)&&45===e.input.charCodeAt(e.position+1)&&45===e.input.charCodeAt(e.position+2)?(e.position+=3,F(e,!0,-1)):s&&M(e,"directives end mark is expected"),J(e,e.lineIndent-1,4,!1,!0),F(e,!0,-1),e.checkLineBreaks&&l.test(e.input.slice(r,e.position))&&T(e,"non-ASCII line breaks are interpreted as content"),e.documents.push(e.result),e.position===e.lineStart&&R(e)?46===e.input.charCodeAt(e.position)&&(e.position+=3,F(e,!0,-1)):e.position<e.length-1&&M(e,"end of the stream or a document separator is expected")}function B(e,t){t=t||{},0!==(e=String(e)).length&&(10!==e.charCodeAt(e.length-1)&&13!==e.charCodeAt(e.length-1)&&(e+="\n"),65279===e.charCodeAt(0)&&(e=e.slice(1)));var n=new S(e,t),i=e.indexOf("\0");for(-1!==i&&(n.position=i,M(n,"null byte is not allowed in input")),n.input+="\0";32===n.input.charCodeAt(n.position);)n.lineIndent+=1,n.position+=1;for(;n.position<n.length-1;)U(n);return n.documents}e.exports.loadAll=function(e,t,n){null!==t&&"object"==typeof t&&void 0===n&&(n=t,t=null);var i=B(e,n);if("function"!=typeof t)return i;for(var o=0,r=i.length;o<r;o+=1)t(i[o])},e.exports.load=function(e,t){var n=B(e,t);if(0!==n.length){if(1===n.length)return n[0];throw new o("expected a single document in the stream, but found more")}}},265(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.activate=function(e){console.log("Codex Worker extension is now active!");const t=a.workspace.workspaceFolders?.[0]?.uri.fsPath;if(!t)return void a.window.showErrorMessage("No workspace folder found. Please open a folder first.");m=new c.GitLabService,g=new l.ManifestService,b=new u.AudioDiscoveryService(t),w=new d.PreflightService(b,g,m),v=new p.JobTreeDataProvider(t,g);const n=a.window.createTreeView("codex-worker-jobs",{treeDataProvider:v,showCollapseAll:!1}),i=a.commands.registerCommand("codex-worker.helloWorld",()=>{a.window.showInformationMessage("Hello World from codex-worker!")}),o=a.commands.registerCommand("codex-worker.testGitLabConnection",async()=>{try{if(a.window.showInformationMessage("Testing GitLab connection..."),await m.initialize(),a.window.showInformationMessage("✓ Frontier Authentication connected"),!await m.verifyConnection())return void a.window.showErrorMessage("✗ GitLab connection failed. Please check your authentication.");a.window.showInformationMessage("✓ GitLab API connection verified");const e=await m.getProjectIdFromWorkspace();if(!e)return void a.window.showWarningMessage("⚠ No GitLab remote found in workspace. Please push your project to GitLab first.");a.window.showInformationMessage(`✓ Found GitLab project: ${decodeURIComponent(e)}`),await m.isWorkerMember()?a.window.showInformationMessage("✓ GPU worker is already a member of this project"):a.window.showInformationMessage("○ GPU worker is not yet a member of this project"),a.window.showInformationMessage("✓ GitLab integration test completed successfully!")}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`GitLab test failed: ${t}`),console.error("GitLab test error:",e)}}),r=a.commands.registerCommand("codex-worker.testManifestGeneration",async()=>{try{if(a.window.showInformationMessage("Testing manifest generation..."),await g.manifestExists()&&"Yes"!==await a.window.showWarningMessage("Manifest file already exists. Overwrite with test data?","Yes","No"))return void a.window.showInformationMessage("Manifest generation cancelled");const e=g.generateJobId();a.window.showInformationMessage(`✓ Generated job ID: ${e}`);const t={job_id:e,job_type:"tts",mode:"training_and_inference",submitted_at:(new Date).toISOString(),model:{type:"StableTTS"},epochs:100,training:{include_verses:["GEN.1.1","GEN.1.2","GEN.1.3","GEN.1.4","GEN.1.5"]},inference:{include_verses:["GEN.1.1","GEN.1.2","GEN.1.3"]}};await g.addJob(t),a.window.showInformationMessage("✓ Created manifest with sample job");const n=await g.readManifest();n&&n.jobs.length>0&&a.window.showInformationMessage(`✓ Manifest verified: version ${n.version}, ${n.jobs.length} job(s)`);const i=(await g.getJobsWithState())[0];a.window.showInformationMessage(`✓ Job state: ${i.state} (${i.mode} mode, ${i.epochs||"N/A"} epochs)`),a.window.showInformationMessage("✓ Manifest generation test completed successfully!")}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`Manifest test failed: ${t}`),console.error("Manifest test error:",e)}}),s=a.commands.registerCommand("codex-worker.testAudioDiscovery",async()=>{try{a.window.showInformationMessage("Testing audio discovery...");const e=await b.discoverAudio({validateFiles:!0});a.window.showInformationMessage(`✓ Found ${e.totalVerses} verses in ${e.books.length} book(s)`),a.window.showInformationMessage(`✓ Audio coverage: ${e.versesWithAudio}/${e.totalVerses} verses (${Math.round(e.versesWithAudio/e.totalVerses*100)}%)`);for(const t of e.books){const n=e.versesByBook.get(t)||0,i=e.audioByBook.get(t)||0,o=n>0?Math.round(i/n*100):0;a.window.showInformationMessage(`  ${t}: ${i}/${n} verses (${o}%)`)}const t=b.validateAudioSufficiency(e,10);if(t.sufficient?a.window.showInformationMessage(`✓ ${t.message}`):a.window.showWarningMessage(`⚠ ${t.message}`),e.versesWithoutAudio>0&&"Yes"===await a.window.showInformationMessage(`${e.versesWithoutAudio} cells are missing audio. Show details?`,"Yes","No")){const t=e.verses.filter(e=>!e.hasAudio).slice(0,10).map(e=>e.verseRef||e.cellId).join(", ");a.window.showInformationMessage(`Missing audio (first 10): ${t}${e.versesWithoutAudio>10?"...":""}`)}a.window.showInformationMessage("✓ Audio discovery test completed successfully!")}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`Audio discovery test failed: ${t}`),console.error("Audio discovery test error:",e)}}),j=a.commands.registerCommand("codex-worker.refreshJobs",async()=>{await v.refresh(),a.window.showInformationMessage("Job list refreshed")});async function _(t){const n=new h.NewJobWizard(b,g,e.extensionUri,e.globalState),i=await n.run(t);return i?async function(e){const t=g.generateJobId(),n="training"===e.mode||"training_and_inference"===e.mode,i="inference"===e.mode||"training_and_inference"===e.mode,o=!(!e.trainingIncludeVerses&&!e.trainingExcludeVerses),r=n&&o?{include_verses:e.trainingIncludeVerses,exclude_verses:e.trainingExcludeVerses}:void 0,s=!(!e.inferenceIncludeVerses&&!e.inferenceExcludeVerses),a=i&&s?{include_verses:e.inferenceIncludeVerses,exclude_verses:e.inferenceExcludeVerses}:void 0,c={job_id:t,name:e.name,description:e.description,job_type:"tts",mode:e.mode,submitted_at:(new Date).toISOString(),model:{type:e.modelType,base_checkpoint:e.baseCheckpoint},epochs:e.epochs,training:r,inference:a,voice_reference:e.voiceReference,canceled:!1};return await g.addJob(c),await m.shareProjectWithWorker(),await v.refresh(),t}(i):null}const x=a.commands.registerCommand("codex-worker.newJob",async()=>{if(k&&(k.dispose(),k=null),y)a.window.showInformationMessage("A job wizard is already open.");else{y=!0;try{const e=await _();e&&a.window.showInformationMessage(`✓ Job ${e} created successfully!`)}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`Failed to create job: ${t}`),console.error("New job error:",e)}finally{y=!1}}}),A=a.commands.registerCommand("codex-worker.viewJobDetail",async t=>{if(!t||!t.job)return;if(y)return void a.window.showInformationMessage("Please close the job wizard first.");k&&(k.dispose(),k=null,await new Promise(e=>setTimeout(e,50)));const n=new f.JobDetailPanel(g,e.extensionUri);k=n;try{const e=await n.run(t.job);if(!e&&k!==n)return;if(k===n&&(k=null),await v.refresh(),"further-train"===e?.action){y=!0;try{const t=e.job.name||e.job.job_id,n={mode:"training",modelType:e.job.model.type,baseCheckpoint:e.checkpointPath??null,contextLabel:`Further training from ${t}`},i=await _(n);i&&a.window.showInformationMessage(`✓ Job ${i} created successfully!`)}finally{y=!1}}else if("run-inference"===e?.action){y=!0;try{const t=e.job.name||e.job.job_id,n={mode:"inference",modelType:e.job.model.type,baseCheckpoint:e.checkpointPath??null,contextLabel:`Inference using model from ${t}`},i=await _(n);i&&a.window.showInformationMessage(`✓ Job ${i} created successfully!`)}finally{y=!1}}else if("clone-job"===e?.action){y=!0;try{const t=e.job,n=t.name||t.job_id,i={mode:t.mode,modelType:t.model.type,baseCheckpoint:t.model.base_checkpoint??null,voiceReference:t.voice_reference??null,contextLabel:`Clone of ${n}`},o=await _(i);o&&a.window.showInformationMessage(`✓ Job ${o} created successfully!`)}finally{y=!1}}}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`Job detail error: ${t}`),console.error("View job detail error:",e)}finally{k===n&&(k=null)}}),I=a.commands.registerCommand("codex-worker.cancelJob",async e=>{try{if(!e||!e.job)return void a.window.showErrorMessage("No job selected");const t=e.job.job_id;if("Yes"!==await a.window.showWarningMessage(`Remove job ${t} from the manifest?`,{modal:!0},"Yes","No"))return;await g.removeJob(t),await v.refresh(),a.window.showInformationMessage(`✓ Job ${t} removed from manifest`)}catch(e){const t=e instanceof Error?e.message:String(e);a.window.showErrorMessage(`Failed to remove job: ${t}`),console.error("Remove job error:",e)}}),S=a.commands.registerCommand("codex-worker.viewPrivacyPolicy",async()=>{const t=a.Uri.joinPath(e.extensionUri,"PRIVACY.md");try{await a.commands.executeCommand("markdown.showPreview",t)}catch{const e=await a.workspace.openTextDocument(t);await a.window.showTextDocument(e,{preview:!0})}});e.subscriptions.push(i,o,r,s,v,n,j,x,A,I,S)},t.deactivate=function(){console.log("Codex Worker extension is deactivating..."),m=void 0,g=void 0,b=void 0,w=void 0,v=void 0,console.log("Codex Worker extension deactivated.")};const a=s(n(398)),c=n(23),l=n(377),u=n(298),d=n(511),p=n(193),h=n(933),f=n(487);let m,g,b,w,v,y=!1,k=null},298(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.AudioDiscoveryService=void 0;const a=s(n(928)),c=s(n(943));t.AudioDiscoveryService=class{workspaceRoot;constructor(e){this.workspaceRoot=e}async discoverAudio(e={}){const t=e.baseDir||"./files/target",n=a.join(this.workspaceRoot,t),i=await this.findCodexFiles(n);if(0===i.length)throw new Error(`No .codex files found in ${t}`);const o=[],r=new Set,s=new Map,c=new Map;for(const t of i){const n=await this.parseCodexFile(t,e);for(const t of n){if(t.book){if(e.filterBooks&&!e.filterBooks.includes(t.book))continue;if(e.verseRange&&!this.matchesVerseRange(t,e.verseRange))continue;r.add(t.book),s.set(t.book,(s.get(t.book)||0)+1),t.hasAudio&&c.set(t.book,(c.get(t.book)||0)+1)}o.push(t)}}o.sort((e,t)=>{if(!e.book&&!t.book)return 0;if(!e.book)return 1;if(!t.book)return-1;if(e.book!==t.book)return e.book.localeCompare(t.book);const n=e.chapter??0,i=t.chapter??0;return n!==i?n-i:(e.verse??0)-(t.verse??0)});const l=o.filter(e=>e.hasAudio).length;return{totalVerses:o.length,versesWithAudio:l,versesWithoutAudio:o.length-l,verses:o,books:Array.from(r).sort(),versesByBook:s,audioByBook:c}}async findCodexFiles(e){const t=[];try{await this.findCodexFilesRecursive(e,t)}catch(t){if("ENOENT"===t.code)throw new Error(`Directory not found: ${e}`);throw t}return t}async findCodexFilesRecursive(e,t){try{const n=await c.readdir(e,{withFileTypes:!0});for(const i of n){const n=a.join(e,i.name);i.isDirectory()?await this.findCodexFilesRecursive(n,t):i.isFile()&&i.name.endsWith(".codex")&&t.push(n)}}catch(t){console.warn(`Could not read directory ${e}:`,t)}}async parseCodexFile(e,t){const n=[];try{const i=await c.readFile(e,"utf-8"),o=JSON.parse(i),r=a.basename(e,".codex").toUpperCase();for(const i of o.cells){const o=await this.extractVerseFromCell(i,r,e,t);o&&n.push(o)}}catch(t){throw console.error(`Error parsing .codex file ${e}:`,t),new Error(`Failed to parse .codex file: ${e}`)}return n}parseBibleReference(e){const t=e.split(" ");if(2!==t.length)return null;const n=t[0],i=t[1].split(":");if(2!==i.length)return null;const o=parseInt(i[0],10),r=i[1].split("-"),s=parseInt(r[0],10);return isNaN(o)||isNaN(s)?null:{book:n,chapter:o,verse:s}}async extractVerseFromCell(e,t,n,i){if("text"!==e.metadata.type)return null;const o=e.metadata.id;let r;o.includes(":")?r=o:e.metadata.data?.globalReferences&&e.metadata.data.globalReferences.length>0&&(r=e.metadata.data.globalReferences[0]);let s=null;r&&(s=this.parseBibleReference(r),s||console.warn(`Could not parse Bible reference: ${r}`));let l,u,d=!1,p=!1;if(e.metadata.attachments&&e.metadata.selectedAudioId){const t=e.metadata.attachments[e.metadata.selectedAudioId];if(t&&!t.isDeleted){u=e.metadata.selectedAudioId;const o=t.url,r=a.join(a.dirname(n),"..","..",o),s=r.replace(`${a.sep}.project${a.sep}attachments${a.sep}files${a.sep}`,`${a.sep}.project${a.sep}attachments${a.sep}pointers${a.sep}`);if(i.validateFiles){let e=!1;try{await c.access(r),e=!0}catch{}let t=!1;try{await c.access(s),t=!0}catch{}d=e||t,p=e,d&&(l=o)}else d=!0,p=!1,l=o}}return{cellId:o,verseRef:r,book:s?.book,chapter:s?.chapter,verse:s?.verse,text:e.value,hasAudio:d,hasLocalAudio:p,audioPath:l,audioId:u}}matchesVerseRange(e,t){return!(!e.book||void 0===e.chapter||void 0===e.verse||e.book!==t.book||void 0!==t.startChapter&&e.chapter<t.startChapter||void 0!==t.endChapter&&e.chapter>t.endChapter||void 0!==t.startChapter&&e.chapter===t.startChapter&&void 0!==t.startVerse&&e.verse<t.startVerse||void 0!==t.endChapter&&e.chapter===t.endChapter&&void 0!==t.endVerse&&e.verse>t.endVerse)}async getMissingAudio(e){return(await this.discoverAudio({filterBooks:[e]})).verses.filter(e=>!e.hasAudio)}async getVersesWithAudio(e,t,n){return(await this.discoverAudio({filterBooks:[e],verseRange:{book:e,startChapter:t,endChapter:n}})).verses.filter(e=>e.hasAudio)}validateAudioSufficiency(e,t=10){const n=e.versesWithAudio,i=n>=t;return{sufficient:i,count:n,required:t,message:i?`Found ${n} audio samples (minimum ${t} required)`:`Insufficient audio: found ${n}, need at least ${t} samples`}}}},342(e,t,n){var i=n(388),o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r";e.exports=new i("tag:yaml.org,2002:binary",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t,n,i=0,r=e.length,s=o;for(n=0;n<r;n++)if(!((t=s.indexOf(e.charAt(n)))>64)){if(t<0)return!1;i+=6}return i%8==0},construct:function(e){var t,n,i=e.replace(/[\r\n=]/g,""),r=i.length,s=o,a=0,c=[];for(t=0;t<r;t++)t%4==0&&t&&(c.push(a>>16&255),c.push(a>>8&255),c.push(255&a)),a=a<<6|s.indexOf(i.charAt(t));return 0==(n=r%4*6)?(c.push(a>>16&255),c.push(a>>8&255),c.push(255&a)):18===n?(c.push(a>>10&255),c.push(a>>2&255)):12===n&&c.push(a>>4&255),new Uint8Array(c)},predicate:function(e){return"[object Uint8Array]"===Object.prototype.toString.call(e)},represent:function(e){var t,n,i="",r=0,s=e.length,a=o;for(t=0;t<s;t++)t%3==0&&t&&(i+=a[r>>18&63],i+=a[r>>12&63],i+=a[r>>6&63],i+=a[63&r]),r=(r<<8)+e[t];return 0==(n=s%3)?(i+=a[r>>18&63],i+=a[r>>12&63],i+=a[r>>6&63],i+=a[63&r]):2===n?(i+=a[r>>10&63],i+=a[r>>4&63],i+=a[r<<2&63],i+=a[64]):1===n&&(i+=a[r>>2&63],i+=a[r<<4&63],i+=a[64],i+=a[64]),i}})},369(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:map",{kind:"mapping",construct:function(e){return null!==e?e:{}}})},377(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.ManifestService=void 0;const a=s(n(398)),c=s(n(896)),l=s(n(928)),u=s(n(210));class d{static MANIFEST_DIR="gpu_jobs";static MANIFEST_FILE="manifest.yaml";static MANIFEST_VERSION=1;getManifestPath(){const e=a.workspace.workspaceFolders;if(!e||0===e.length)return null;const t=e[0].uri.fsPath;return l.join(t,d.MANIFEST_DIR,d.MANIFEST_FILE)}getJobsDirectory(){const e=a.workspace.workspaceFolders;if(!e||0===e.length)return null;const t=e[0].uri.fsPath;return l.join(t,d.MANIFEST_DIR)}generateJobId(){return`${Date.now().toString(36)}_${Math.random().toString(36).substring(2,15)}`}async readManifest(){const e=this.getManifestPath();if(!e)throw new Error("No workspace folder open");if(!c.existsSync(e))return null;try{const t=c.readFileSync(e,"utf8"),n=u.load(t);return this.validateManifest(n),n}catch(e){throw new Error(`Failed to read manifest: ${e instanceof Error?e.message:String(e)}`)}}async writeManifest(e){const t=this.getManifestPath();if(!t)throw new Error("No workspace folder open");this.validateManifest(e);const n=l.dirname(t);c.existsSync(n)||c.mkdirSync(n,{recursive:!0});try{const n=u.dump(e,{indent:2,lineWidth:-1,noRefs:!0});c.writeFileSync(t,n,"utf8")}catch(e){throw new Error(`Failed to write manifest: ${e instanceof Error?e.message:String(e)}`)}}createEmptyManifest(){return{version:d.MANIFEST_VERSION,jobs:[]}}async addJob(e){let t=await this.readManifest();if(t||(t=this.createEmptyManifest()),t.jobs.some(t=>t.job_id===e.job_id))throw new Error(`Job with ID ${e.job_id} already exists`);e.submitted_at||(e.submitted_at=(new Date).toISOString()),t.jobs.push(e),await this.writeManifest(t)}async updateJob(e,t){const n=await this.readManifest();if(!n)throw new Error("No manifest file exists");const i=n.jobs.findIndex(t=>t.job_id===e);if(-1===i)throw new Error(`Job with ID ${e} not found`);n.jobs[i]={...n.jobs[i],...t,job_id:e},await this.writeManifest(n)}async cancelJob(e){await this.updateJob(e,{canceled:!0})}async removeJob(e){const t=await this.readManifest();if(!t)throw new Error("No manifest file exists");const n=t.jobs.findIndex(t=>t.job_id===e);if(-1===n)throw new Error(`Job with ID ${e} not found`);t.jobs.splice(n,1),await this.writeManifest(t)}async deleteJobFolder(e){const t=this.getJobsDirectory();if(!t)return;const n=l.join(t,`job_${e}`);c.existsSync(n)&&c.rmSync(n,{recursive:!0,force:!0})}async getJobsWithState(){const e=await this.readManifest();if(!e)return[];const t=this.getJobsDirectory();if(!t)throw new Error("No workspace folder open");return e.jobs.map(e=>{const n=this.determineJobState(e,t);return{...e,...n}})}determineJobState(e,t){const n=l.join(t,`job_${e.job_id}`),i=l.join(n,"response.yaml");if(!c.existsSync(n))return{state:"pending"};if(!c.existsSync(i))return{state:"running"};try{const e=c.readFileSync(i,"utf8"),t=u.load(e);let n=t.timestamp;if(!n)try{n=c.statSync(i).mtime.toISOString()}catch{}return{state:t.state,worker_id:t.worker_id,epochs_completed:t.epochs_completed,error_message:t.error_message,response_timestamp:n}}catch(e){return{state:"running"}}}validateManifest(e){if(!e||"object"!=typeof e)throw new Error("Invalid manifest: must be an object");if("number"!=typeof e.version)throw new Error("Invalid manifest: version must be a number");if(e.version!==d.MANIFEST_VERSION)throw new Error(`Unsupported manifest version: ${e.version} (expected ${d.MANIFEST_VERSION})`);if(!Array.isArray(e.jobs))throw new Error("Invalid manifest: jobs must be an array");e.jobs.forEach((e,t)=>{this.validateJob(e,t)})}validateJob(e,t){const n=`Invalid job at index ${t}`;if(!e||"object"!=typeof e)throw new Error(`${n}: must be an object`);if("string"!=typeof e.job_id||!e.job_id)throw new Error(`${n}: job_id must be a non-empty string`);if("tts"!==e.job_type)throw new Error(`${n}: job_type must be 'tts'`);const i=["training","inference","training_and_inference"];if(!i.includes(e.mode))throw new Error(`${n}: mode must be one of ${i.join(", ")}`);if(!e.model||"object"!=typeof e.model)throw new Error(`${n}: model must be an object`);if("string"!=typeof e.model.type||!e.model.type)throw new Error(`${n}: model.type must be a non-empty string`);if(void 0!==e.epochs&&("number"!=typeof e.epochs||e.epochs<=0))throw new Error(`${n}: epochs must be a positive number`);if(void 0!==e.canceled&&"boolean"!=typeof e.canceled)throw new Error(`${n}: canceled must be a boolean`)}async manifestExists(){const e=this.getManifestPath();return!!e&&c.existsSync(e)}async getJob(e){const t=await this.readManifest();return t&&t.jobs.find(t=>t.job_id===e)||null}async getAvailableCheckpoints(e){const t=await this.readManifest();if(!t)return[];const n=this.getJobsDirectory();if(!n)return[];const i=a.workspace.workspaceFolders?.[0]?.uri.fsPath;if(!i)return[];const o=[];for(const r of t.jobs){if(r.model.type!==e)continue;const t=l.join(n,`job_${r.job_id}`),s=l.join(t,"response.yaml");if(c.existsSync(s))try{const e=c.readFileSync(s,"utf8"),t=u.load(e);if("completed"!==t.state)continue;const n=t.result?.checkpoint_path;if(!n)continue;const a=l.resolve(i,n);if(!c.existsSync(a))continue;let d,p;if(t.timestamp){const e=new Date(t.timestamp);isNaN(e.getTime())||(d=t.timestamp)}try{p=c.statSync(s).mtime}catch{}!d&&p&&(d=p.toISOString());const h=!!(r.training?.include_verses?.length||r.training?.exclude_verses?.length||r.inference?.include_verses?.length||r.inference?.exclude_verses?.length);o.push({jobId:r.job_id,jobName:r.name,checkpointPath:n,modelType:r.model.type,epochs:r.epochs,timestamp:d,fileTimestamp:p,filtered:h})}catch{continue}}return o.sort((e,t)=>{const n=e.timestamp?new Date(e.timestamp).getTime():0;return(t.timestamp?new Date(t.timestamp).getTime():0)-n}),o}}t.ManifestService=d},388(e,t,n){var i=n(231),o=["kind","multi","resolve","construct","instanceOf","predicate","represent","representName","defaultStyle","styleAliases"],r=["scalar","sequence","mapping"];e.exports=function(e,t){var n,s;if(t=t||{},Object.keys(t).forEach(function(t){if(-1===o.indexOf(t))throw new i('Unknown option "'+t+'" is met in definition of "'+e+'" YAML type.')}),this.options=t,this.tag=e,this.kind=t.kind||null,this.resolve=t.resolve||function(){return!0},this.construct=t.construct||function(e){return e},this.instanceOf=t.instanceOf||null,this.predicate=t.predicate||null,this.represent=t.represent||null,this.representName=t.representName||null,this.defaultStyle=t.defaultStyle||null,this.multi=t.multi||!1,this.styleAliases=(n=t.styleAliases||null,s={},null!==n&&Object.keys(n).forEach(function(e){n[e].forEach(function(t){s[String(t)]=e})}),s),-1===r.indexOf(this.kind))throw new i('Unknown kind "'+this.kind+'" is specified for "'+e+'" YAML type.')}},398(e){e.exports=require("vscode")},433(e){function t(e){return null==e}e.exports.isNothing=t,e.exports.isObject=function(e){return"object"==typeof e&&null!==e},e.exports.toArray=function(e){return Array.isArray(e)?e:t(e)?[]:[e]},e.exports.repeat=function(e,t){var n,i="";for(n=0;n<t;n+=1)i+=e;return i},e.exports.isNegativeZero=function(e){return 0===e&&Number.NEGATIVE_INFINITY===1/e},e.exports.extend=function(e,t){var n,i,o,r;if(t)for(n=0,i=(r=Object.keys(t)).length;n<i;n+=1)e[o=r[n]]=t[o];return e}},461(e,t,n){var i=n(433),o=n(388),r=new RegExp("^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[-+]?\\.(?:inf|Inf|INF)|\\.(?:nan|NaN|NAN))$"),s=/^[-+]?[0-9]+e/;e.exports=new o("tag:yaml.org,2002:float",{kind:"scalar",resolve:function(e){return null!==e&&!(!r.test(e)||"_"===e[e.length-1])},construct:function(e){var t,n;return n="-"===(t=e.replace(/_/g,"").toLowerCase())[0]?-1:1,"+-".indexOf(t[0])>=0&&(t=t.slice(1)),".inf"===t?1===n?Number.POSITIVE_INFINITY:Number.NEGATIVE_INFINITY:".nan"===t?NaN:n*parseFloat(t,10)},predicate:function(e){return"[object Number]"===Object.prototype.toString.call(e)&&(e%1!=0||i.isNegativeZero(e))},represent:function(e,t){var n;if(isNaN(e))switch(t){case"lowercase":return".nan";case"uppercase":return".NAN";case"camelcase":return".NaN"}else if(Number.POSITIVE_INFINITY===e)switch(t){case"lowercase":return".inf";case"uppercase":return".INF";case"camelcase":return".Inf"}else if(Number.NEGATIVE_INFINITY===e)switch(t){case"lowercase":return"-.inf";case"uppercase":return"-.INF";case"camelcase":return"-.Inf"}else if(i.isNegativeZero(e))return"-0.0";return n=e.toString(10),s.test(n)?n.replace("e",".e"):n},defaultStyle:"lowercase"})},466(e,t,n){var i=n(433),o=n(388);function r(e){return 48<=e&&e<=57||65<=e&&e<=70||97<=e&&e<=102}function s(e){return 48<=e&&e<=55}function a(e){return 48<=e&&e<=57}e.exports=new o("tag:yaml.org,2002:int",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t,n=e.length,i=0,o=!1;if(!n)return!1;if("-"!==(t=e[i])&&"+"!==t||(t=e[++i]),"0"===t){if(i+1===n)return!0;if("b"===(t=e[++i])){for(i++;i<n;i++)if("_"!==(t=e[i])){if("0"!==t&&"1"!==t)return!1;o=!0}return o&&"_"!==t}if("x"===t){for(i++;i<n;i++)if("_"!==(t=e[i])){if(!r(e.charCodeAt(i)))return!1;o=!0}return o&&"_"!==t}if("o"===t){for(i++;i<n;i++)if("_"!==(t=e[i])){if(!s(e.charCodeAt(i)))return!1;o=!0}return o&&"_"!==t}}if("_"===t)return!1;for(;i<n;i++)if("_"!==(t=e[i])){if(!a(e.charCodeAt(i)))return!1;o=!0}return!(!o||"_"===t)},construct:function(e){var t,n=e,i=1;if(-1!==n.indexOf("_")&&(n=n.replace(/_/g,"")),"-"!==(t=n[0])&&"+"!==t||("-"===t&&(i=-1),t=(n=n.slice(1))[0]),"0"===n)return 0;if("0"===t){if("b"===n[1])return i*parseInt(n.slice(2),2);if("x"===n[1])return i*parseInt(n.slice(2),16);if("o"===n[1])return i*parseInt(n.slice(2),8)}return i*parseInt(n,10)},predicate:function(e){return"[object Number]"===Object.prototype.toString.call(e)&&e%1==0&&!i.isNegativeZero(e)},represent:{binary:function(e){return e>=0?"0b"+e.toString(2):"-0b"+e.toString(2).slice(1)},octal:function(e){return e>=0?"0o"+e.toString(8):"-0o"+e.toString(8).slice(1)},decimal:function(e){return e.toString(10)},hexadecimal:function(e){return e>=0?"0x"+e.toString(16).toUpperCase():"-0x"+e.toString(16).toUpperCase().slice(1)}},defaultStyle:"decimal",styleAliases:{binary:[2,"bin"],octal:[8,"oct"],decimal:[10,"dec"],hexadecimal:[16,"hex"]}})},487(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.JobDetailPanel=void 0;const a=s(n(398)),c=s(n(896)),l=s(n(928)),u=s(n(210)),d=n(502);t.JobDetailPanel=class{manifestService;extensionUri;workspaceRoot;ui=null;constructor(e,t){this.manifestService=e,this.extensionUri=t,this.workspaceRoot=a.workspace.workspaceFolders?.[0]?.uri.fsPath||""}dispose(){this.ui&&(this.ui.dispose(),this.ui=null)}async run(e){const t=e.name||e.job_id;this.ui=new d.WebviewUI(this.extensionUri,this.workspaceRoot,`Job: ${t}`);try{const t=this.computeAvailableActions(e),n=this.buildDetailData(e,t),i=await this.ui.showJobDetail(n);return i?await this.handleAction(i,e):null}catch(e){const t=e instanceof Error?e.message:String(e);return a.window.showErrorMessage(`Job detail error: ${t}`),null}finally{this.ui&&(this.ui.dispose(),this.ui=null)}}computeAvailableActions(e){const t=[];"pending"!==e.state&&"running"!==e.state||t.push("cancel-job"),t.push("delete-job"),"completed"===e.state&&this.resolveCheckpointForTraining(e)&&t.push("further-train"),"completed"!==e.state||"training"!==e.mode&&"training_and_inference"!==e.mode||this.getProducedCheckpoint(e.job_id)&&t.push("run-inference"),"completed"!==e.state&&"failed"!==e.state&&"canceled"!==e.state||t.push("clone-job");const n=this.getJobFolderPath(e.job_id);if(n&&c.existsSync(n)){const e=l.join(n,"logs.txt");c.existsSync(e)&&t.push("view-logs"),t.push("open-job-folder")}return t}buildDetailData(e,t){const n=this.getJobFolderPath(e.job_id);return{jobId:e.job_id,name:e.name,description:e.description,jobType:e.job_type,mode:e.mode,state:e.state,modelType:e.model.type,baseCheckpoint:e.model.base_checkpoint,epochs:e.epochs,epochsCompleted:e.epochs_completed,workerId:e.worker_id,submittedAt:e.submitted_at,responseTimestamp:e.response_timestamp,errorMessage:e.error_message,canceled:e.canceled??!1,trainingVerseCount:this.countVerses(e.training?.include_verses,e.training?.exclude_verses),inferenceVerseCount:this.countVerses(e.inference?.include_verses,e.inference?.exclude_verses),voiceReference:e.voice_reference,hasJobFolder:!(!n||!c.existsSync(n)),availableActions:t,trainingMetrics:this.parseTrainingMetrics(e.job_id)}}countVerses(e,t){return e&&e.length>0?e.length:t&&t.length>0?t.length:void 0}async handleAction(e,t){switch(e){case"cancel-job":return await this.manifestService.cancelJob(t.job_id),a.window.showInformationMessage(`Job ${t.job_id} has been canceled.`),null;case"delete-job":return"Delete"===await a.window.showWarningMessage(`Delete job ${t.job_id}?\n\nThis will permanently delete:\n• The trained model checkpoint\n• All job output files and logs\n• The job entry from the manifest\n\nYou will not be able to generate audio from this model without recovering it from version control.`,{modal:!0},"Delete","Cancel")&&(await this.manifestService.deleteJobFolder(t.job_id),await this.manifestService.removeJob(t.job_id),a.window.showInformationMessage(`Job ${t.job_id} has been deleted.`)),null;case"further-train":return{action:"further-train",job:t,checkpointPath:this.resolveCheckpointForTraining(t)||void 0};case"run-inference":return{action:"run-inference",job:t,checkpointPath:this.getProducedCheckpoint(t.job_id)||void 0};case"clone-job":return{action:"clone-job",job:t};case"view-logs":{const e=this.getJobFolderPath(t.job_id);if(e){const t=l.join(e,"logs.txt");if(c.existsSync(t)){const e=await a.workspace.openTextDocument(t);await a.window.showTextDocument(e,{preview:!0})}else a.window.showWarningMessage("No logs file found for this job.")}return null}case"open-job-folder":{const e=this.getJobFolderPath(t.job_id);if(e&&c.existsSync(e)){const t=a.Uri.file(e);await a.commands.executeCommand("revealInExplorer",t)}else a.window.showWarningMessage("Job folder not found on disk.");return null}default:return null}}resolveCheckpointForTraining(e){return"training"===e.mode||"training_and_inference"===e.mode?this.getProducedCheckpoint(e.job_id):"inference"===e.mode?e.model.base_checkpoint??null:null}parseTrainingMetrics(e){const t=this.getJobFolderPath(e);if(!t)return;const n=l.join(t,"checkpoint","training_metrics.csv");if(c.existsSync(n))try{const e=c.readFileSync(n,"utf8").trim();if(!e)return;const t=e.split(/\r?\n/);if(t.length<2)return;const i=t[0].split(",").map(e=>e.trim()),o=i.indexOf("epoch"),r=i.filter(e=>"epoch"!==e&&e.length>0);if(0===r.length)return;const s=[],a={};for(const e of r)a[e]=[];for(let e=1;e<t.length;e++){const n=t[e].trim();if(!n)continue;const c=n.split(",").map(e=>e.trim());let l;if(o>=0&&o<c.length){if(l=parseFloat(c[o]),isNaN(l))continue}else l=e-1;s.push(l);for(const e of r){const t=i.indexOf(e);if(t>=0&&t<c.length){const n=parseFloat(c[t]);a[e].push(isNaN(n)?NaN:n)}else a[e].push(NaN)}}if(0===s.length)return;const l=r.filter(e=>a[e].some(e=>!isNaN(e)));if(0===l.length)return;const u={};for(const e of l)u[e]=a[e];const d=l.includes("train_total_loss")&&l.includes("val_total_loss");return{columns:l,epochs:s,series:u,hasPrimaryColumns:d}}catch{return}}getJobFolderPath(e){return this.workspaceRoot?l.join(this.workspaceRoot,"gpu_jobs",`job_${e}`):null}getProducedCheckpoint(e){if(!this.workspaceRoot)return null;const t=l.join(this.workspaceRoot,"gpu_jobs",`job_${e}`,"response.yaml");if(!c.existsSync(t))return null;try{const e=c.readFileSync(t,"utf8"),n=u.load(e);if("completed"!==n.state||!n.result?.checkpoint_path)return null;const i=l.resolve(this.workspaceRoot,n.result.checkpoint_path);return c.existsSync(i)?n.result.checkpoint_path:null}catch{return null}}}},489(e,t,n){e.exports=n(769).extend({implicit:[n(127),n(851)],explicit:[n(342),n(946),n(942),n(663)]})},502(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.WebviewUI=void 0;const a=s(n(398)),c=s(n(928));t.WebviewUI=class{extensionUri;workspaceRoot;panelTitle;panel;disposed=!1;taskCounter=0;pendingResolve=null;pendingTaskId=null;messageDisposable=null;constructor(e,t,n="New GPU Job"){this.extensionUri=e,this.workspaceRoot=t,this.panelTitle=n,this.panel=a.window.createWebviewPanel("codexWorkerPanel",this.panelTitle,a.ViewColumn.One,{enableScripts:!0,retainContextWhenHidden:!0,localResourceRoots:[a.Uri.joinPath(e,"media"),...t?[a.Uri.file(c.join(t,".project","attachments"))]:[]]}),this.panel.webview.html=this.getHtmlContent(),this.panel.onDidDispose(()=>{this.disposed=!0,this.pendingResolve&&(this.pendingResolve(void 0),this.pendingResolve=null,this.pendingTaskId=null),this.messageDisposable&&(this.messageDisposable.dispose(),this.messageDisposable=null)}),this.messageDisposable=this.panel.webview.onDidReceiveMessage(e=>{if("get-audio-uri"===e.type&&e.filePath){const t=a.Uri.file(e.filePath),n=this.panel.webview.asWebviewUri(t);return void this.panel.webview.postMessage({type:"audio-uri",uri:n.toString(),requestId:e.requestId})}if("open-privacy-policy"!==e.type){if(this.pendingResolve&&this.pendingTaskId)if("response"===e.type&&e.taskId===this.pendingTaskId){const t=this.pendingResolve;this.pendingResolve=null,this.pendingTaskId=null,t(e.result)}else if("cancel"===e.type&&e.taskId===this.pendingTaskId){const e=this.pendingResolve;this.pendingResolve=null,this.pendingTaskId=null,e(void 0)}}else a.commands.executeCommand("codex-worker.viewPrivacyPolicy")})}get isDisposed(){return this.disposed}dispose(){this.disposed||this.panel.dispose()}async askWebview(e){if(this.disposed)return;const t="task_"+ ++this.taskCounter,n={type:"task",taskId:t,...e};return new Promise(e=>{this.pendingResolve=e,this.pendingTaskId=t,this.panel.webview.postMessage(n)})}async showQuickPick(e,t){return this.askWebview({taskType:"quickpick",items:e,title:t?.title,placeHolder:t?.placeHolder})}async showInputBox(e){return this.askWebview({taskType:"inputbox",title:e?.title,prompt:e?.prompt,value:e?.value,placeHolder:e?.placeHolder,validationRegex:e?.validationRegex,validationMessage:e?.validationMessage})}async showVerseSelector(e,t){return this.askWebview({taskType:"verse-selector",verses:e,phase:t.phase,selectionMode:t.selectionMode,showHideRecorded:t.showHideRecorded,showPlayButton:t.showPlayButton,allowSkip:t.allowSkip})}async showAudioReferenceSelector(e){const t=await this.askWebview({taskType:"verse-selector",verses:e,phase:"Reference Audio",selectionMode:"single-audio",showHideRecorded:!1,showPlayButton:!0,allowSkip:!0});if(t)return 0===t.selectedIds.length?null:t.selectedAudioPath||null}async showConfirmation(e){return this.askWebview({taskType:"confirmation",data:e})}async showJobDetail(e){return this.askWebview({taskType:"job-detail",data:e})}getHtmlContent(){const e=this.panel.webview,t=e.asWebviewUri(a.Uri.joinPath(this.extensionUri,"media","wizard.css")),n=e.asWebviewUri(a.Uri.joinPath(this.extensionUri,"media","wizard.js")),i=function(){let e="";const t="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";for(let n=0;n<32;n++)e+=t.charAt(Math.floor(62*Math.random()));return e}();return`<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${e.cspSource} 'unsafe-inline'; script-src 'nonce-${i}'; media-src ${e.cspSource};">\n    <link href="${t}" rel="stylesheet">\n    <title>New GPU Job</title>\n</head>\n<body>\n    <div id="wizard-root"></div>\n    <script nonce="${i}" src="${n}"><\/script>\n</body>\n</html>`}}},511(e,t){Object.defineProperty(t,"__esModule",{value:!0}),t.PreflightService=void 0,t.PreflightService=class{audioDiscoveryService;manifestService;gitlabService;constructor(e,t,n){this.audioDiscoveryService=e,this.manifestService=t,this.gitlabService=n}async performChecks(e){const t=[],n=[],i=await this.checkAudioData(e,t,n);await this.checkRunningJobs(n),e.baseCheckpoint&&await this.checkBaseModel(e.baseCheckpoint,t),await this.checkGitLabConnectivity(t);const o=!(!e.trainingIncludeVerses&&!e.trainingExcludeVerses),r=!(!e.inferenceIncludeVerses&&!e.inferenceExcludeVerses);return o&&this.validateVerseSelection(e.trainingIncludeVerses,e.trainingExcludeVerses,"Training",n),r&&this.validateVerseSelection(e.inferenceIncludeVerses,e.inferenceExcludeVerses,"Inference",n),this.validateModeRequirements(e,t),{passed:0===t.length,errors:t,warnings:n,audioStats:i}}async checkAudioData(e,t,n){try{const i=await this.audioDiscoveryService.discoverAudio({validateFiles:!0}),o=i.totalVerses,r=i.versesWithoutAudio,s=i.versesWithAudio/i.totalVerses*100;return"training"!==e.mode&&"training_and_inference"!==e.mode||(0===i.versesWithAudio?t.push("No audio recordings found. Training requires audio data."):i.versesWithAudio<50&&n.push(`Only ${i.versesWithAudio} audio recordings found. Recommended minimum: 50 for quality training.`)),"inference"!==e.mode||e.baseCheckpoint||t.push("Inference mode requires a base checkpoint to be specified."),{totalPairs:o,missingRecordings:r,coveragePercentage:s}}catch(e){const n=e instanceof Error?e.message:String(e);return t.push(`Failed to analyze audio data: ${n}`),{totalPairs:0,missingRecordings:0,coveragePercentage:0}}}async checkRunningJobs(e){try{const t=await this.manifestService.getJobsWithState(),n=t.filter(e=>"running"===e.state),i=t.filter(e=>"pending"===e.state),o=n.length+i.length;o>0&&e.push(`${o} job(s) already in the queue. New job will be queued after existing jobs.`)}catch(e){console.warn("Failed to check running jobs:",e)}}async checkBaseModel(e,t){if(!e||0===e.trim().length)return void t.push("Base checkpoint path cannot be empty.");const n=e.startsWith("job_"),i=e.includes("/")||e.includes("\\")||e.endsWith(".pt");n||i||t.push(`Base checkpoint "${e}" doesn't look like a valid path or job ID. Expected format: "job_xxx" or "path/to/model.pt"`)}async checkGitLabConnectivity(e){try{if(!await this.gitlabService.getProjectIdFromWorkspace())return void e.push("Cannot detect GitLab project. Make sure this is a Git repository with a GitLab remote.");await this.gitlabService.isWorkerMember()||console.log("Worker is not yet a project member (will be added on job submission)")}catch(t){const n=t instanceof Error?t.message:String(t);e.push(`GitLab connectivity check failed: ${n}`)}}validateVerseSelection(e,t,n,i){e&&t&&i.push(`${n}: Both include and exclude verse lists specified. Include list will take precedence.`),e&&0===e.length&&i.push(`${n}: Include verse list is empty - no verses will be processed.`);const o=[...e||[],...t||[]];for(const e of o)this.isValidVerseReference(e)||i.push(`${n}: Cell reference "${e}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`)}validateModeRequirements(e,t){"training"!==e.mode&&"training_and_inference"!==e.mode||e.epochs||t.push("Training mode requires epoch count to be specified."),"inference"!==e.mode||e.baseCheckpoint||t.push("Inference mode requires a base checkpoint to be specified."),void 0!==e.epochs&&(e.epochs<=0&&t.push("Epoch count must be greater than 0."),e.epochs>1e4&&t.push("Epoch count seems unreasonably high (max: 10000)."))}isValidVerseReference(e){const t=e.trim();return/^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/.test(t)||/^[a-zA-Z0-9\-]+$/.test(t)}async getAudioCoverageSummary(){try{const e=await this.audioDiscoveryService.discoverAudio({validateFiles:!0}),t=[];t.push(`Total Coverage: ${e.versesWithAudio}/${e.totalVerses} verses (${(e.versesWithAudio/e.totalVerses*100).toFixed(1)}%)`),t.push(""),t.push("By Book:");for(const n of e.books){const i=e.versesByBook.get(n)||0,o=e.audioByBook.get(n)||0,r=i>0?o/i*100:0;t.push(`  ${n}: ${o}/${i} (${r.toFixed(1)}%)`)}return t.join("\n")}catch(e){return"Failed to get audio coverage summary"}}}},636(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:seq",{kind:"sequence",construct:function(e){return null!==e?e:[]}})},663(e,t,n){var i=n(388),o=Object.prototype.hasOwnProperty;e.exports=new i("tag:yaml.org,2002:set",{kind:"mapping",resolve:function(e){if(null===e)return!0;var t,n=e;for(t in n)if(o.call(n,t)&&null!==n[t])return!1;return!0},construct:function(e){return null!==e?e:{}}})},759(e,t,n){var i=n(119);e.exports=new i({explicit:[n(212),n(636),n(369)]})},769(e,t,n){e.exports=n(184)},781(e,t,n){var i=n(433),o=n(231),r=n(489),s=Object.prototype.toString,a=Object.prototype.hasOwnProperty,c=65279,l={0:"\\0",7:"\\a",8:"\\b",9:"\\t",10:"\\n",11:"\\v",12:"\\f",13:"\\r",27:"\\e",34:'\\"',92:"\\\\",133:"\\N",160:"\\_",8232:"\\L",8233:"\\P"},u=["y","Y","yes","Yes","YES","on","On","ON","n","N","no","No","NO","off","Off","OFF"],d=/^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;function p(e){var t,n,r;if(t=e.toString(16).toUpperCase(),e<=255)n="x",r=2;else if(e<=65535)n="u",r=4;else{if(!(e<=4294967295))throw new o("code point within a string may not be greater than 0xFFFFFFFF");n="U",r=8}return"\\"+n+i.repeat("0",r-t.length)+t}function h(e){this.schema=e.schema||r,this.indent=Math.max(1,e.indent||2),this.noArrayIndent=e.noArrayIndent||!1,this.skipInvalid=e.skipInvalid||!1,this.flowLevel=i.isNothing(e.flowLevel)?-1:e.flowLevel,this.styleMap=function(e,t){var n,i,o,r,s,c,l;if(null===t)return{};for(n={},o=0,r=(i=Object.keys(t)).length;o<r;o+=1)s=i[o],c=String(t[s]),"!!"===s.slice(0,2)&&(s="tag:yaml.org,2002:"+s.slice(2)),(l=e.compiledTypeMap.fallback[s])&&a.call(l.styleAliases,c)&&(c=l.styleAliases[c]),n[s]=c;return n}(this.schema,e.styles||null),this.sortKeys=e.sortKeys||!1,this.lineWidth=e.lineWidth||80,this.noRefs=e.noRefs||!1,this.noCompatMode=e.noCompatMode||!1,this.condenseFlow=e.condenseFlow||!1,this.quotingType='"'===e.quotingType?2:1,this.forceQuotes=e.forceQuotes||!1,this.replacer="function"==typeof e.replacer?e.replacer:null,this.implicitTypes=this.schema.compiledImplicit,this.explicitTypes=this.schema.compiledExplicit,this.tag=null,this.result="",this.duplicates=[],this.usedDuplicates=null}function f(e,t){for(var n,o=i.repeat(" ",t),r=0,s=-1,a="",c=e.length;r<c;)-1===(s=e.indexOf("\n",r))?(n=e.slice(r),r=c):(n=e.slice(r,s+1),r=s+1),n.length&&"\n"!==n&&(a+=o),a+=n;return a}function m(e,t){return"\n"+i.repeat(" ",e.indent*t)}function g(e){return 32===e||9===e}function b(e){return 32<=e&&e<=126||161<=e&&e<=55295&&8232!==e&&8233!==e||57344<=e&&e<=65533&&e!==c||65536<=e&&e<=1114111}function w(e){return b(e)&&e!==c&&13!==e&&10!==e}function v(e,t,n){var i=w(e),o=i&&!g(e);return(n?i:i&&44!==e&&91!==e&&93!==e&&123!==e&&125!==e)&&35!==e&&!(58===t&&!o)||w(t)&&!g(t)&&35===e||58===t&&o}function y(e,t){var n,i=e.charCodeAt(t);return i>=55296&&i<=56319&&t+1<e.length&&(n=e.charCodeAt(t+1))>=56320&&n<=57343?1024*(i-55296)+n-56320+65536:i}function k(e){return/^\n* /.test(e)}function j(e,t,n,i,r){e.dump=function(){if(0===t.length)return 2===e.quotingType?'""':"''";if(!e.noCompatMode&&(-1!==u.indexOf(t)||d.test(t)))return 2===e.quotingType?'"'+t+'"':"'"+t+"'";var s=e.indent*Math.max(1,n),a=-1===e.lineWidth?-1:Math.max(Math.min(e.lineWidth,40),e.lineWidth-s),h=i||e.flowLevel>-1&&n>=e.flowLevel;switch(function(e,t,n,i,o,r,s,a){var l,u,d=0,p=null,h=!1,f=!1,m=-1!==i,w=-1,j=b(u=y(e,0))&&u!==c&&!g(u)&&45!==u&&63!==u&&58!==u&&44!==u&&91!==u&&93!==u&&123!==u&&125!==u&&35!==u&&38!==u&&42!==u&&33!==u&&124!==u&&61!==u&&62!==u&&39!==u&&34!==u&&37!==u&&64!==u&&96!==u&&function(e){return!g(e)&&58!==e}(y(e,e.length-1));if(t||s)for(l=0;l<e.length;d>=65536?l+=2:l++){if(!b(d=y(e,l)))return 5;j=j&&v(d,p,a),p=d}else{for(l=0;l<e.length;d>=65536?l+=2:l++){if(10===(d=y(e,l)))h=!0,m&&(f=f||l-w-1>i&&" "!==e[w+1],w=l);else if(!b(d))return 5;j=j&&v(d,p,a),p=d}f=f||m&&l-w-1>i&&" "!==e[w+1]}return h||f?n>9&&k(e)?5:s?2===r?5:2:f?4:3:!j||s||o(e)?2===r?5:2:1}(t,h,e.indent,a,function(t){return function(e,t){var n,i;for(n=0,i=e.implicitTypes.length;n<i;n+=1)if(e.implicitTypes[n].resolve(t))return!0;return!1}(e,t)},e.quotingType,e.forceQuotes&&!i,r)){case 1:return t;case 2:return"'"+t.replace(/'/g,"''")+"'";case 3:return"|"+_(t,e.indent)+x(f(t,s));case 4:return">"+_(t,e.indent)+x(f(function(e,t){for(var n,i,o,r=/(\n+)([^\n]*)/g,s=(o=-1!==(o=e.indexOf("\n"))?o:e.length,r.lastIndex=o,A(e.slice(0,o),t)),a="\n"===e[0]||" "===e[0];i=r.exec(e);){var c=i[1],l=i[2];n=" "===l[0],s+=c+(a||n||""===l?"":"\n")+A(l,t),a=n}return s}(t,a),s));case 5:return'"'+function(e){for(var t,n="",i=0,o=0;o<e.length;i>=65536?o+=2:o++)i=y(e,o),!(t=l[i])&&b(i)?(n+=e[o],i>=65536&&(n+=e[o+1])):n+=t||p(i);return n}(t)+'"';default:throw new o("impossible error: invalid scalar style")}}()}function _(e,t){var n=k(e)?String(t):"",i="\n"===e[e.length-1];return n+(!i||"\n"!==e[e.length-2]&&"\n"!==e?i?"":"-":"+")+"\n"}function x(e){return"\n"===e[e.length-1]?e.slice(0,-1):e}function A(e,t){if(""===e||" "===e[0])return e;for(var n,i,o=/ [^ ]/g,r=0,s=0,a=0,c="";n=o.exec(e);)(a=n.index)-r>t&&(i=s>r?s:a,c+="\n"+e.slice(r,i),r=i+1),s=a;return c+="\n",e.length-r>t&&s>r?c+=e.slice(r,s)+"\n"+e.slice(s+1):c+=e.slice(r),c.slice(1)}function I(e,t,n,i){var o,r,s,a="",c=e.tag;for(o=0,r=n.length;o<r;o+=1)s=n[o],e.replacer&&(s=e.replacer.call(n,String(o),s)),(C(e,t+1,s,!0,!0,!1,!0)||void 0===s&&C(e,t+1,null,!0,!0,!1,!0))&&(i&&""===a||(a+=m(e,t)),e.dump&&10===e.dump.charCodeAt(0)?a+="-":a+="- ",a+=e.dump);e.tag=c,e.dump=a||"[]"}function S(e,t,n){var i,r,c,l,u,d;for(c=0,l=(r=n?e.explicitTypes:e.implicitTypes).length;c<l;c+=1)if(((u=r[c]).instanceOf||u.predicate)&&(!u.instanceOf||"object"==typeof t&&t instanceof u.instanceOf)&&(!u.predicate||u.predicate(t))){if(n?u.multi&&u.representName?e.tag=u.representName(t):e.tag=u.tag:e.tag="?",u.represent){if(d=e.styleMap[u.tag]||u.defaultStyle,"[object Function]"===s.call(u.represent))i=u.represent(t,d);else{if(!a.call(u.represent,d))throw new o("!<"+u.tag+'> tag resolver accepts not "'+d+'" style');i=u.represent[d](t,d)}e.dump=i}return!0}return!1}function C(e,t,n,i,r,a,c){e.tag=null,e.dump=n,S(e,n,!1)||S(e,n,!0);var l,u=s.call(e.dump),d=i;i&&(i=e.flowLevel<0||e.flowLevel>t);var p,h,f="[object Object]"===u||"[object Array]"===u;if(f&&(h=-1!==(p=e.duplicates.indexOf(n))),(null!==e.tag&&"?"!==e.tag||h||2!==e.indent&&t>0)&&(r=!1),h&&e.usedDuplicates[p])e.dump="*ref_"+p;else{if(f&&h&&!e.usedDuplicates[p]&&(e.usedDuplicates[p]=!0),"[object Object]"===u)i&&0!==Object.keys(e.dump).length?(function(e,t,n,i){var r,s,a,c,l,u,d="",p=e.tag,h=Object.keys(n);if(!0===e.sortKeys)h.sort();else if("function"==typeof e.sortKeys)h.sort(e.sortKeys);else if(e.sortKeys)throw new o("sortKeys must be a boolean or a function");for(r=0,s=h.length;r<s;r+=1)u="",i&&""===d||(u+=m(e,t)),c=n[a=h[r]],e.replacer&&(c=e.replacer.call(n,a,c)),C(e,t+1,a,!0,!0,!0)&&((l=null!==e.tag&&"?"!==e.tag||e.dump&&e.dump.length>1024)&&(e.dump&&10===e.dump.charCodeAt(0)?u+="?":u+="? "),u+=e.dump,l&&(u+=m(e,t)),C(e,t+1,c,!0,l)&&(e.dump&&10===e.dump.charCodeAt(0)?u+=":":u+=": ",d+=u+=e.dump));e.tag=p,e.dump=d||"{}"}(e,t,e.dump,r),h&&(e.dump="&ref_"+p+e.dump)):(function(e,t,n){var i,o,r,s,a,c="",l=e.tag,u=Object.keys(n);for(i=0,o=u.length;i<o;i+=1)a="",""!==c&&(a+=", "),e.condenseFlow&&(a+='"'),s=n[r=u[i]],e.replacer&&(s=e.replacer.call(n,r,s)),C(e,t,r,!1,!1)&&(e.dump.length>1024&&(a+="? "),a+=e.dump+(e.condenseFlow?'"':"")+":"+(e.condenseFlow?"":" "),C(e,t,s,!1,!1)&&(c+=a+=e.dump));e.tag=l,e.dump="{"+c+"}"}(e,t,e.dump),h&&(e.dump="&ref_"+p+" "+e.dump));else if("[object Array]"===u)i&&0!==e.dump.length?(e.noArrayIndent&&!c&&t>0?I(e,t-1,e.dump,r):I(e,t,e.dump,r),h&&(e.dump="&ref_"+p+e.dump)):(function(e,t,n){var i,o,r,s="",a=e.tag;for(i=0,o=n.length;i<o;i+=1)r=n[i],e.replacer&&(r=e.replacer.call(n,String(i),r)),(C(e,t,r,!1,!1)||void 0===r&&C(e,t,null,!1,!1))&&(""!==s&&(s+=","+(e.condenseFlow?"":" ")),s+=e.dump);e.tag=a,e.dump="["+s+"]"}(e,t,e.dump),h&&(e.dump="&ref_"+p+" "+e.dump));else{if("[object String]"!==u){if("[object Undefined]"===u)return!1;if(e.skipInvalid)return!1;throw new o("unacceptable kind of an object to dump "+u)}"?"!==e.tag&&j(e,e.dump,t,a,d)}null!==e.tag&&"?"!==e.tag&&(l=encodeURI("!"===e.tag[0]?e.tag.slice(1):e.tag).replace(/!/g,"%21"),l="!"===e.tag[0]?"!"+l:"tag:yaml.org,2002:"===l.slice(0,18)?"!!"+l.slice(18):"!<"+l+">",e.dump=l+" "+e.dump)}return!0}function M(e,t){var n,i,o=[],r=[];for(T(e,o,r),n=0,i=r.length;n<i;n+=1)t.duplicates.push(o[r[n]]);t.usedDuplicates=new Array(i)}function T(e,t,n){var i,o,r;if(null!==e&&"object"==typeof e)if(-1!==(o=t.indexOf(e)))-1===n.indexOf(o)&&n.push(o);else if(t.push(e),Array.isArray(e))for(o=0,r=e.length;o<r;o+=1)T(e[o],t,n);else for(o=0,r=(i=Object.keys(e)).length;o<r;o+=1)T(e[i[o]],t,n)}e.exports.dump=function(e,t){var n=new h(t=t||{});n.noRefs||M(e,n);var i=e;return n.replacer&&(i=n.replacer.call({"":i},"",i)),C(n,0,i,!0,!0)?n.dump+"\n":""}},806(e,t){Object.defineProperty(t,"__esModule",{value:!0}),t.PRIVACY_SUMMARY=t.PRIVACY_CONSENT_KEY=t.PRIVACY_POLICY_VERSION=void 0,t.PRIVACY_POLICY_VERSION=1,t.PRIVACY_CONSENT_KEY="codex-worker.privacyConsentVersion",t.PRIVACY_SUMMARY=["Your project data will be temporarily shared with a remote GPU processing server to execute this job.","Results will be uploaded back to your project. The server’s access is automatically revoked after job completion (~24 hr), and residual server data is purged after a limited maintenance window.","Your data is never used for other projects without your explicit permission."].join(" ")},851(e,t,n){var i=n(388);e.exports=new i("tag:yaml.org,2002:merge",{kind:"scalar",resolve:function(e){return"<<"===e||null===e}})},896(e){e.exports=require("fs")},928(e){e.exports=require("path")},933(e,t,n){var i,o=this&&this.__createBinding||(Object.create?function(e,t,n,i){void 0===i&&(i=n);var o=Object.getOwnPropertyDescriptor(t,n);o&&!("get"in o?!t.__esModule:o.writable||o.configurable)||(o={enumerable:!0,get:function(){return t[n]}}),Object.defineProperty(e,i,o)}:function(e,t,n,i){void 0===i&&(i=n),e[i]=t[n]}),r=this&&this.__setModuleDefault||(Object.create?function(e,t){Object.defineProperty(e,"default",{enumerable:!0,value:t})}:function(e,t){e.default=t}),s=this&&this.__importStar||(i=function(e){return i=Object.getOwnPropertyNames||function(e){var t=[];for(var n in e)Object.prototype.hasOwnProperty.call(e,n)&&(t[t.length]=n);return t},i(e)},function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var n=i(e),s=0;s<n.length;s++)"default"!==n[s]&&o(t,e,n[s]);return r(t,e),t});Object.defineProperty(t,"__esModule",{value:!0}),t.NewJobWizard=void 0;const a=s(n(398)),c=s(n(928)),l=n(502),u=n(806);t.NewJobWizard=class{audioDiscoveryService;manifestService;extensionUri;globalState;workspaceRoot;constructor(e,t,n,i){this.audioDiscoveryService=e,this.manifestService=t,this.extensionUri=n,this.globalState=i,this.workspaceRoot=a.workspace.workspaceFolders?.[0]?.uri.fsPath||""}async run(e){const t=e?.contextLabel?`GPU Job: ${e.contextLabel}`:"New GPU Job",n=new l.WebviewUI(this.extensionUri,this.workspaceRoot,t);try{let t=null,i=!1;for(;!i&&(t=await this.runWizardSteps(n,e),t);){const e=await this.runPreflightChecks(t),o=await this.getTotalVerseCount(),r=this.buildConfirmationData(t,e,o);r.privacySummary=u.PRIVACY_SUMMARY;const s=this.globalState?.get(u.PRIVACY_CONSENT_KEY);r.privacyPreviouslyConsented=s===u.PRIVACY_POLICY_VERSION;const a=await n.showConfirmation(r);if("submit"===a)!r.privacyPreviouslyConsented&&this.globalState&&await this.globalState.update(u.PRIVACY_CONSENT_KEY,u.PRIVACY_POLICY_VERSION),i=!0;else{if("start-over"!==a){t=null;break}t=null}}return t}catch(e){const t=e instanceof Error?e.message:String(e);return a.window.showErrorMessage(`Failed to create job: ${t}`),null}finally{n.dispose()}}async runWizardSteps(e,t){const n=t?.mode??await this.selectMode(e);if(!n)return null;const i=t?.modelType??await this.selectModelType(e);if(!i)return null;let o,r,s,a,c,l,u,d=n;if(void 0!==t?.baseCheckpoint)o=t.baseCheckpoint;else if(o=await this.selectBaseCheckpoint(e,d,i),void 0===o){if("inference"!==d)return null;{const t=await e.showQuickPick([{label:"Train & Infer",description:"Train a new model first, then run inference"},{label:"Cancel",description:"Go back"}],{title:"No Checkpoints Available",placeHolder:"No trained model checkpoints found. Would you like to train first?"});if("Train & Infer"!==t?.label)return null;d="training_and_inference"}}if(("training"===d||"training_and_inference"===d)&&(r=await this.selectEpochs(e),void 0===r))return null;if("training_and_inference"===d){const t=await this.selectVerses(e,"Training");if(!t)return null;c=t.include,l=t.exclude;const n=await this.selectVerses(e,"Inference");if(!n)return null;s=n.include,a=n.exclude}else if("training"===d){const t=await this.selectVerses(e,"Training");if(!t)return null;c=t.include,l=t.exclude}else if("inference"===d){const t=await this.selectVerses(e,"Inference");if(!t)return null;s=t.include,a=t.exclude}if("inference"===d||"training_and_inference"===d)if(void 0!==t?.voiceReference)u=t.voiceReference;else if(u=await this.selectVoiceReference(e),void 0===u)return null;const p=await this.enterJobName(e);if(void 0===p)return null;let h=null;return p&&(h=await this.enterJobDescription(e),void 0===h)?null:{name:p||void 0,description:h||void 0,mode:d,modelType:i,baseCheckpoint:o||void 0,epochs:r,inferenceIncludeVerses:s,inferenceExcludeVerses:a,trainingIncludeVerses:c,trainingExcludeVerses:l,voiceReference:u||void 0}}async selectMode(e){const t=await e.showQuickPick([{label:"Training",description:"Train a new TTS model",detail:"Creates a new model or fine-tunes an existing one"},{label:"Inference",description:"Generate audio from text",detail:"Uses an existing model to synthesize speech"},{label:"Training and Inference",description:"Train then generate audio",detail:"Trains a model and then runs inference on selected verses"}],{title:"Select Job Mode",placeHolder:"What would you like to do?"});return t&&{Training:"training",Inference:"inference","Training and Inference":"training_and_inference"}[t.label]||null}async selectModelType(e){const t=await e.showQuickPick([{label:"StableTTS",description:"Stable Text-to-Speech model",detail:"High-quality TTS with good stability"}],{title:"Select Model Type",placeHolder:"Which TTS model would you like to use?"});return t?t.label:null}async selectBaseCheckpoint(e,t,n){if("inference"!==t){const t=[{label:"Train New Model",description:"Start from scratch",detail:"Create a brand new model without a base checkpoint"},{label:"Continue From Existing Model",description:"Fine-tune an existing model",detail:"Select a previously trained model as the base"}],n=await e.showQuickPick(t,{title:"Base Model",placeHolder:"Start from scratch or fine-tune an existing model?"});if(!n)return;if("Train New Model"===n.label)return null}return this.pickCheckpoint(e,n)}async pickCheckpoint(e,t){const n=await this.manifestService.getAvailableCheckpoints(t);if(0===n.length)return void a.window.showWarningMessage(`No trained model checkpoints found for model type "${t}". Complete a training job first.`);const i=n.map(e=>{const t=[];if(e.epochs&&t.push(`${e.epochs} epochs`),e.timestamp)try{const n=new Date(e.timestamp);t.push(n.toLocaleDateString())}catch{}else e.fileTimestamp&&t.push(e.fileTimestamp.toLocaleDateString());return e.filtered&&t.push("filtered"),{label:e.jobName||e.jobId,description:(e.jobName?[e.jobId,...t]:t).join(" • "),detail:e.checkpointPath}}),o=await e.showQuickPick(i,{title:"Select Model Checkpoint",placeHolder:"Choose a trained model checkpoint"});return o?o.detail:void 0}async selectEpochs(e){const t=await e.showInputBox({title:"Training Epochs",prompt:"How many epochs should the model train for?",value:"100",validationRegex:"^[1-9]\\d{0,3}$",validationMessage:"Please enter a positive number between 1 and 9999"});if(t)return parseInt(t,10)}async selectVerses(e,t){const n=[{label:"All Cells",description:`Use all cells for ${t.toLowerCase()}`,detail:`Process every cell in the project for ${t.toLowerCase()}`},{label:"Specific Cells",description:"Choose which cells to include/exclude",detail:`Manually specify cell references for ${t.toLowerCase()}`}],i=await e.showQuickPick(n,{title:`${t} Cell Selection`,placeHolder:`Which cells should be used for ${t.toLowerCase()}?`});if(!i)return null;if("All Cells"===i.label)return{};const o=[{label:"Include Specific Cells",description:`Only use these cells for ${t.toLowerCase()}`},{label:"Exclude Specific Cells",description:`Use all except these cells for ${t.toLowerCase()}`}],r=await e.showQuickPick(o,{title:`${t} Filter Type`,placeHolder:`Include or exclude cells for ${t.toLowerCase()}?`});if(!r)return null;const s=r.label.includes("Include"),a="Inference"===t&&s,c=await this.audioDiscoveryService.discoverAudio(),l=("Training"===t?c.verses.filter(e=>e.hasAudio):c.verses).map(e=>({cellId:e.cellId,displayRef:e.verseRef||e.cellId,hasAudio:e.hasAudio})),u=await e.showVerseSelector(l,{phase:t,selectionMode:s?"include":"exclude",showHideRecorded:a});return u?0===u.selectedIds.length?{}:s?{include:u.selectedIds}:{exclude:u.selectedIds}:null}async selectVoiceReference(e){const t=await e.showQuickPick([{label:"Use Default Voice",description:"No specific voice reference"},{label:"Select Reference Audio",description:"Choose from recorded verses"}],{title:"Voice Reference",placeHolder:"Use a specific voice reference?"});if(!t)return;if("Use Default Voice"===t.label)return null;const n=(await this.audioDiscoveryService.discoverAudio({validateFiles:!0})).verses.filter(e=>e.hasAudio);if(0===n.length)return a.window.showWarningMessage("No audio recordings found for reference selection."),null;const i=n.map(e=>{let t;return e.hasLocalAudio&&e.audioPath&&this.workspaceRoot&&(t=c.join(this.workspaceRoot,e.audioPath)),{cellId:e.cellId,displayRef:e.verseRef||e.cellId,hasAudio:e.hasAudio,hasLocalAudio:e.hasLocalAudio,audioFilePath:t}});return await e.showAudioReferenceSelector(i)}async enterJobName(e){const t=await e.showInputBox({title:"Job Name (Optional)",prompt:"Give this job a name to identify it easily, or leave blank to skip",value:"",placeHolder:'e.g., "Genesis Training Run 1"'});if(void 0!==t)return t.trim()||null}async enterJobDescription(e){const t=await e.showInputBox({title:"Job Description (Optional)",prompt:"Add a description for this job, or leave blank to skip",value:"",placeHolder:'e.g., "Training on Genesis chapters 1-3 with default voice"'});if(void 0!==t)return t.trim()||null}async runPreflightChecks(e){const t=[],n=[];try{const i=await this.audioDiscoveryService.discoverAudio({validateFiles:!0}),o=i.totalVerses,r=i.versesWithoutAudio,s=o>0?i.versesWithAudio/o*100:0;"training"!==e.mode&&"training_and_inference"!==e.mode||(0===i.versesWithAudio?t.push("No audio recordings found. Training requires audio data."):i.versesWithAudio<50&&n.push(`Only ${i.versesWithAudio} audio recordings found. Recommended minimum: 50 for quality training.`)),"inference"!==e.mode||e.baseCheckpoint||t.push("Inference mode requires a base checkpoint."),"training"!==e.mode&&"training_and_inference"!==e.mode||e.epochs||t.push("Training mode requires epoch count.");const a=await this.manifestService.getJobsWithState(),c=a.filter(e=>"pending"===e.state),l=a.filter(e=>"running"===e.state);if(c.length>0||l.length>0){const e=c.length+l.length;n.push(`${e} job(s) already in the queue. New job will be queued after existing jobs.`)}return{passed:0===t.length,errors:t,warnings:n,audioStats:{totalPairs:o,missingRecordings:r,coveragePercentage:s}}}catch(e){const i=e instanceof Error?e.message:String(e);return t.push(`Failed to analyze audio data: ${i}`),{passed:!1,errors:t,warnings:n,audioStats:{totalPairs:0,missingRecordings:0,coveragePercentage:0}}}}async getTotalVerseCount(){try{return(await this.audioDiscoveryService.discoverAudio()).totalVerses}catch{return 0}}buildConfirmationData(e,t,n){const i={name:e.name,description:e.description,mode:e.mode,modelType:e.modelType,baseCheckpoint:e.baseCheckpoint,epochs:e.epochs,voiceReference:e.voiceReference,audioStats:t.audioStats,warnings:t.warnings,errors:t.errors};return"training"!==e.mode&&"training_and_inference"!==e.mode||(e.trainingIncludeVerses&&e.trainingIncludeVerses.length>0?i.trainingSelection={type:"include",count:e.trainingIncludeVerses.length,totalCount:n}:e.trainingExcludeVerses&&e.trainingExcludeVerses.length>0?i.trainingSelection={type:"exclude",count:e.trainingExcludeVerses.length,totalCount:n}:i.trainingSelection={type:"all",totalCount:n}),"inference"!==e.mode&&"training_and_inference"!==e.mode||(e.inferenceIncludeVerses&&e.inferenceIncludeVerses.length>0?i.inferenceSelection={type:"include",count:e.inferenceIncludeVerses.length,totalCount:n}:e.inferenceExcludeVerses&&e.inferenceExcludeVerses.length>0?i.inferenceSelection={type:"exclude",count:e.inferenceExcludeVerses.length,totalCount:n}:i.inferenceSelection={type:"all",totalCount:n}),i}async showConfirmation(e,t){const n=[];n.push("**Job Configuration:**"),n.push(`- Mode: ${e.mode}`),n.push(`- Model: ${e.modelType}`),e.baseCheckpoint&&n.push(`- Base Checkpoint: ${e.baseCheckpoint}`),e.epochs&&n.push(`- Epochs: ${e.epochs}`),n.push(""),n.push("**Audio Data:**"),n.push(`- Total Pairs: ${t.audioStats.totalPairs}`),n.push(`- Missing Recordings: ${t.audioStats.missingRecordings}`),n.push(`- Coverage: ${t.audioStats.coveragePercentage.toFixed(1)}%`),t.warnings.length>0&&(n.push(""),n.push("**⚠️ Warnings:**"),t.warnings.forEach(e=>n.push(`- ${e}`))),t.errors.length>0&&(n.push(""),n.push("**❌ Errors:**"),t.errors.forEach(e=>n.push(`- ${e}`)));const i=n.join("\n");return t.passed?"Submit Job"===await a.window.showInformationMessage(i,{modal:!0},"Submit Job","Cancel"):(await a.window.showErrorMessage("Cannot submit job due to validation errors:\n\n"+i,{modal:!0}),!1)}}},942(e,t,n){var i=n(388),o=Object.prototype.toString;e.exports=new i("tag:yaml.org,2002:pairs",{kind:"sequence",resolve:function(e){if(null===e)return!0;var t,n,i,r,s,a=e;for(s=new Array(a.length),t=0,n=a.length;t<n;t+=1){if(i=a[t],"[object Object]"!==o.call(i))return!1;if(1!==(r=Object.keys(i)).length)return!1;s[t]=[r[0],i[r[0]]]}return!0},construct:function(e){if(null===e)return[];var t,n,i,o,r,s=e;for(r=new Array(s.length),t=0,n=s.length;t<n;t+=1)i=s[t],o=Object.keys(i),r[t]=[o[0],i[o[0]]];return r}})},943(e){e.exports=require("fs/promises")},946(e,t,n){var i=n(388),o=Object.prototype.hasOwnProperty,r=Object.prototype.toString;e.exports=new i("tag:yaml.org,2002:omap",{kind:"sequence",resolve:function(e){if(null===e)return!0;var t,n,i,s,a,c=[],l=e;for(t=0,n=l.length;t<n;t+=1){if(i=l[t],a=!1,"[object Object]"!==r.call(i))return!1;for(s in i)if(o.call(i,s)){if(a)return!1;a=!0}if(!a)return!1;if(-1!==c.indexOf(s))return!1;c.push(s)}return!0},construct:function(e){return null!==e?e:[]}})}},t={},n=function n(i){var o=t[i];if(void 0!==o)return o.exports;var r=t[i]={exports:{}};return e[i].call(r.exports,r,r.exports,n),r.exports}(265);module.exports=n})();
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+/******/ 	var __webpack_modules__ = ([
+/* 0 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.activate = activate;
+exports.deactivate = deactivate;
+// The module 'vscode' contains the VS Code extensibility API
+// Import the module and reference it with the alias vscode in your code below
+const vscode = __importStar(__webpack_require__(1));
+const GitLabService_1 = __webpack_require__(2);
+const ManifestService_1 = __webpack_require__(5);
+const AudioDiscoveryService_1 = __webpack_require__(31);
+const PreflightService_1 = __webpack_require__(33);
+const JobTreeDataProvider_1 = __webpack_require__(34);
+const NewJobWizard_1 = __webpack_require__(35);
+const JobDetailPanel_1 = __webpack_require__(38);
+// Global service instances
+let gitLabService;
+let manifestService;
+let audioDiscoveryService;
+let preflightService;
+let jobTreeDataProvider;
+// Track active panels to manage concurrency.
+// - wizardRunning: true when a multi-step wizard is open (cannot be interrupted)
+// - activeDetailPanel: reference to the current detail panel's WebviewUI so it
+//   can be disposed (which resolves its pending promise to undefined) when the
+//   user clicks a different job
+let wizardRunning = false;
+let activeDetailPanel = null;
+// This method is called when your extension is activated
+// Your extension is activated the very first time the command is executed
+function activate(context) {
+    // Use the console to output diagnostic information (console.log) and errors (console.error)
+    // This line of code will only be executed once when your extension is activated
+    console.log('Codex Worker extension is now active!');
+    // Initialize services
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) {
+        vscode.window.showErrorMessage('No workspace folder found. Please open a folder first.');
+        return;
+    }
+    gitLabService = new GitLabService_1.GitLabService();
+    manifestService = new ManifestService_1.ManifestService();
+    audioDiscoveryService = new AudioDiscoveryService_1.AudioDiscoveryService(workspaceRoot);
+    preflightService = new PreflightService_1.PreflightService(audioDiscoveryService, manifestService, gitLabService);
+    // Initialize tree data provider
+    jobTreeDataProvider = new JobTreeDataProvider_1.JobTreeDataProvider(workspaceRoot, manifestService);
+    // Register tree view
+    const treeView = vscode.window.createTreeView('codex-worker-jobs', {
+        treeDataProvider: jobTreeDataProvider,
+        showCollapseAll: false
+    });
+    // Register hello world command (for testing)
+    const helloWorldDisposable = vscode.commands.registerCommand('codex-worker.helloWorld', () => {
+        vscode.window.showInformationMessage('Hello World from codex-worker!');
+    });
+    // Register GitLab connection test command
+    const testGitLabDisposable = vscode.commands.registerCommand('codex-worker.testGitLabConnection', async () => {
+        try {
+            vscode.window.showInformationMessage('Testing GitLab connection...');
+            // Initialize the service
+            await gitLabService.initialize();
+            vscode.window.showInformationMessage('✓ Frontier Authentication connected');
+            // Verify GitLab connection
+            const isConnected = await gitLabService.verifyConnection();
+            if (!isConnected) {
+                vscode.window.showErrorMessage('✗ GitLab connection failed. Please check your authentication.');
+                return;
+            }
+            vscode.window.showInformationMessage('✓ GitLab API connection verified');
+            // Get project ID from workspace
+            const projectId = await gitLabService.getProjectIdFromWorkspace();
+            if (!projectId) {
+                vscode.window.showWarningMessage('⚠ No GitLab remote found in workspace. Please push your project to GitLab first.');
+                return;
+            }
+            vscode.window.showInformationMessage(`✓ Found GitLab project: ${decodeURIComponent(projectId)}`);
+            // Check if worker is already a member
+            const isWorkerMember = await gitLabService.isWorkerMember();
+            if (isWorkerMember) {
+                vscode.window.showInformationMessage('✓ GPU worker is already a member of this project');
+            }
+            else {
+                vscode.window.showInformationMessage('○ GPU worker is not yet a member of this project');
+            }
+            vscode.window.showInformationMessage('✓ GitLab integration test completed successfully!');
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`GitLab test failed: ${errorMessage}`);
+            console.error('GitLab test error:', error);
+        }
+    });
+    // Register manifest generation test command
+    const testManifestDisposable = vscode.commands.registerCommand('codex-worker.testManifestGeneration', async () => {
+        try {
+            vscode.window.showInformationMessage('Testing manifest generation...');
+            // Check if manifest already exists
+            const exists = await manifestService.manifestExists();
+            if (exists) {
+                const overwrite = await vscode.window.showWarningMessage('Manifest file already exists. Overwrite with test data?', 'Yes', 'No');
+                if (overwrite !== 'Yes') {
+                    vscode.window.showInformationMessage('Manifest generation cancelled');
+                    return;
+                }
+            }
+            // Generate a test job ID
+            const jobId = manifestService.generateJobId();
+            vscode.window.showInformationMessage(`✓ Generated job ID: ${jobId}`);
+            // Create a sample job
+            const sampleJob = {
+                job_id: jobId,
+                job_type: 'tts',
+                mode: 'training_and_inference',
+                submitted_at: new Date().toISOString(),
+                model: {
+                    type: 'StableTTS'
+                },
+                epochs: 100,
+                training: {
+                    include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3', 'GEN.1.4', 'GEN.1.5']
+                },
+                inference: {
+                    include_verses: ['GEN.1.1', 'GEN.1.2', 'GEN.1.3']
+                }
+            };
+            // Add job to manifest
+            await manifestService.addJob(sampleJob);
+            vscode.window.showInformationMessage('✓ Created manifest with sample job');
+            // Read back the manifest to verify
+            const manifest = await manifestService.readManifest();
+            if (manifest && manifest.jobs.length > 0) {
+                vscode.window.showInformationMessage(`✓ Manifest verified: version ${manifest.version}, ${manifest.jobs.length} job(s)`);
+            }
+            // Get jobs with state
+            const jobsWithState = await manifestService.getJobsWithState();
+            const firstJob = jobsWithState[0];
+            vscode.window.showInformationMessage(`✓ Job state: ${firstJob.state} (${firstJob.mode} mode, ${firstJob.epochs || 'N/A'} epochs)`);
+            vscode.window.showInformationMessage('✓ Manifest generation test completed successfully!');
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Manifest test failed: ${errorMessage}`);
+            console.error('Manifest test error:', error);
+        }
+    });
+    // Register audio discovery test command
+    const testAudioDiscoveryDisposable = vscode.commands.registerCommand('codex-worker.testAudioDiscovery', async () => {
+        try {
+            vscode.window.showInformationMessage('Testing audio discovery...');
+            // Discover all audio
+            const summary = await audioDiscoveryService.discoverAudio({
+                validateFiles: true
+            });
+            // Show summary
+            vscode.window.showInformationMessage(`✓ Found ${summary.totalVerses} verses in ${summary.books.length} book(s)`);
+            vscode.window.showInformationMessage(`✓ Audio coverage: ${summary.versesWithAudio}/${summary.totalVerses} verses (${Math.round(summary.versesWithAudio / summary.totalVerses * 100)}%)`);
+            // Show per-book breakdown
+            for (const book of summary.books) {
+                const totalVerses = summary.versesByBook.get(book) || 0;
+                const audioVerses = summary.audioByBook.get(book) || 0;
+                const percentage = totalVerses > 0 ? Math.round(audioVerses / totalVerses * 100) : 0;
+                vscode.window.showInformationMessage(`  ${book}: ${audioVerses}/${totalVerses} verses (${percentage}%)`);
+            }
+            // Validate audio sufficiency
+            const validation = audioDiscoveryService.validateAudioSufficiency(summary, 10);
+            if (validation.sufficient) {
+                vscode.window.showInformationMessage(`✓ ${validation.message}`);
+            }
+            else {
+                vscode.window.showWarningMessage(`⚠ ${validation.message}`);
+            }
+            // Show missing audio if any
+            if (summary.versesWithoutAudio > 0) {
+                const showMissing = await vscode.window.showInformationMessage(`${summary.versesWithoutAudio} cells are missing audio. Show details?`, 'Yes', 'No');
+                if (showMissing === 'Yes') {
+                    const missingCells = summary.verses
+                        .filter(v => !v.hasAudio)
+                        .slice(0, 10) // Show first 10
+                        .map(v => v.verseRef || v.cellId) // Show Bible ref if available, otherwise cell ID
+                        .join(', ');
+                    vscode.window.showInformationMessage(`Missing audio (first 10): ${missingCells}${summary.versesWithoutAudio > 10 ? '...' : ''}`);
+                }
+            }
+            vscode.window.showInformationMessage('✓ Audio discovery test completed successfully!');
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Audio discovery test failed: ${errorMessage}`);
+            console.error('Audio discovery test error:', error);
+        }
+    });
+    // Register refresh jobs command
+    const refreshJobsDisposable = vscode.commands.registerCommand('codex-worker.refreshJobs', async () => {
+        await jobTreeDataProvider.refresh();
+        vscode.window.showInformationMessage('Job list refreshed');
+    });
+    /**
+     * Create a job from wizard parameters: builds the manifest entry,
+     * adds it, shares the project, and refreshes the tree.
+     * Returns the new job ID, or null if creation failed.
+     */
+    async function createJobFromParams(jobParams) {
+        const jobId = manifestService.generateJobId();
+        // Build separate training and inference configs
+        const needsTraining = jobParams.mode === 'training' || jobParams.mode === 'training_and_inference';
+        const needsInference = jobParams.mode === 'inference' || jobParams.mode === 'training_and_inference';
+        const hasTrainingFilters = !!(jobParams.trainingIncludeVerses || jobParams.trainingExcludeVerses);
+        const trainingConfig = (needsTraining && hasTrainingFilters) ? {
+            include_verses: jobParams.trainingIncludeVerses,
+            exclude_verses: jobParams.trainingExcludeVerses
+        } : undefined;
+        const hasInferenceFilters = !!(jobParams.inferenceIncludeVerses || jobParams.inferenceExcludeVerses);
+        const inferenceConfig = (needsInference && hasInferenceFilters) ? {
+            include_verses: jobParams.inferenceIncludeVerses,
+            exclude_verses: jobParams.inferenceExcludeVerses
+        } : undefined;
+        const job = {
+            job_id: jobId,
+            name: jobParams.name,
+            description: jobParams.description,
+            job_type: jobParams.jobType,
+            mode: jobParams.mode,
+            submitted_at: new Date().toISOString(),
+            model: {
+                type: jobParams.modelType,
+                base_checkpoint: jobParams.baseCheckpoint
+            },
+            epochs: jobParams.epochs,
+            training: trainingConfig,
+            inference: inferenceConfig,
+            voice_reference: jobParams.jobType === 'tts' ? jobParams.voiceReference : undefined,
+            transmorgrifier: jobParams.transmorgrifierEnabled !== undefined
+                ? { enabled: jobParams.transmorgrifierEnabled }
+                : undefined,
+            canceled: false
+        };
+        // Add job to manifest
+        await manifestService.addJob(job);
+        // Share project with worker
+        await gitLabService.shareProjectWithWorker();
+        // Refresh the tree view
+        await jobTreeDataProvider.refresh();
+        return jobId;
+    }
+    /**
+     * Run the new job wizard (optionally with presets) and create the job.
+     * Returns the new job ID, or null if the user canceled.
+     */
+    async function runWizardAndCreateJob(presets) {
+        const wizard = new NewJobWizard_1.NewJobWizard(audioDiscoveryService, manifestService, context.extensionUri, context.globalState);
+        const jobParams = await wizard.run(presets);
+        if (!jobParams) {
+            return null;
+        }
+        return createJobFromParams(jobParams);
+    }
+    // Register new job command
+    const newJobDisposable = vscode.commands.registerCommand('codex-worker.newJob', async () => {
+        // If a detail panel is open, close it (resolves its promise to undefined)
+        if (activeDetailPanel) {
+            activeDetailPanel.dispose();
+            activeDetailPanel = null;
+        }
+        // Prevent opening a wizard while another wizard is running
+        if (wizardRunning) {
+            vscode.window.showInformationMessage('A job wizard is already open.');
+            return;
+        }
+        wizardRunning = true;
+        try {
+            const jobId = await runWizardAndCreateJob();
+            if (jobId) {
+                vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
+            console.error('New job error:', error);
+        }
+        finally {
+            wizardRunning = false;
+        }
+    });
+    // Register view job detail command (triggered by clicking a job in the tree)
+    const viewJobDetailDisposable = vscode.commands.registerCommand('codex-worker.viewJobDetail', async (jobItem) => {
+        if (!jobItem || !jobItem.job) {
+            return;
+        }
+        // If a wizard is running, don't interrupt it
+        if (wizardRunning) {
+            vscode.window.showInformationMessage('Please close the job wizard first.');
+            return;
+        }
+        // If a detail panel is already open, dispose it so it resolves to undefined
+        // and the previous viewJobDetail call exits cleanly. This allows clicking
+        // a different job to replace the current detail panel.
+        if (activeDetailPanel) {
+            activeDetailPanel.dispose();
+            activeDetailPanel = null;
+            // Small delay to let the previous async handler finish its finally block
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        const panel = new JobDetailPanel_1.JobDetailPanel(manifestService, context.extensionUri);
+        // Track this panel so it can be disposed if the user clicks another job
+        activeDetailPanel = panel;
+        try {
+            const result = await panel.run(jobItem.job);
+            // If this panel was replaced by another (disposed externally),
+            // result will be null and we should just exit quietly
+            if (!result && activeDetailPanel !== panel) {
+                return;
+            }
+            // Clear the active panel reference
+            if (activeDetailPanel === panel) {
+                activeDetailPanel = null;
+            }
+            // Refresh tree after any action (cancel, delete, etc.)
+            await jobTreeDataProvider.refresh();
+            // Handle follow-up actions that need to launch the wizard
+            if (result?.action === 'further-train') {
+                wizardRunning = true;
+                try {
+                    const jobLabel = result.job.name || result.job.job_id;
+                    const presets = {
+                        jobType: result.job.job_type,
+                        mode: 'training',
+                        modelType: result.job.model.type,
+                        baseCheckpoint: result.checkpointPath ?? null,
+                        contextLabel: `Further training from ${jobLabel}`,
+                    };
+                    const jobId = await runWizardAndCreateJob(presets);
+                    if (jobId) {
+                        vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+                    }
+                }
+                finally {
+                    wizardRunning = false;
+                }
+            }
+            else if (result?.action === 'run-inference') {
+                wizardRunning = true;
+                try {
+                    const jobLabel = result.job.name || result.job.job_id;
+                    const presets = {
+                        jobType: result.job.job_type,
+                        mode: 'inference',
+                        modelType: result.job.model.type,
+                        baseCheckpoint: result.checkpointPath ?? null,
+                        contextLabel: `Inference using model from ${jobLabel}`,
+                    };
+                    const jobId = await runWizardAndCreateJob(presets);
+                    if (jobId) {
+                        vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+                    }
+                }
+                finally {
+                    wizardRunning = false;
+                }
+            }
+            else if (result?.action === 'clone-job') {
+                wizardRunning = true;
+                try {
+                    // Clone: pre-fill with the same mode, model type, checkpoint, and voice reference
+                    const job = result.job;
+                    const jobLabel = job.name || job.job_id;
+                    const presets = {
+                        jobType: job.job_type,
+                        mode: job.mode,
+                        modelType: job.model.type,
+                        baseCheckpoint: job.model.base_checkpoint ?? null,
+                        voiceReference: job.voice_reference ?? null,
+                        contextLabel: `Clone of ${jobLabel}`,
+                    };
+                    const jobId = await runWizardAndCreateJob(presets);
+                    if (jobId) {
+                        vscode.window.showInformationMessage(`✓ Job ${jobId} created successfully!`);
+                    }
+                }
+                finally {
+                    wizardRunning = false;
+                }
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Job detail error: ${errorMessage}`);
+            console.error('View job detail error:', error);
+        }
+        finally {
+            // Clean up if this panel is still the active one
+            if (activeDetailPanel === panel) {
+                activeDetailPanel = null;
+            }
+        }
+    });
+    // Register cancel job command
+    const cancelJobDisposable = vscode.commands.registerCommand('codex-worker.cancelJob', async (jobItem) => {
+        try {
+            if (!jobItem || !jobItem.job) {
+                vscode.window.showErrorMessage('No job selected');
+                return;
+            }
+            const jobId = jobItem.job.job_id;
+            const confirm = await vscode.window.showWarningMessage(`Remove job ${jobId} from the manifest?`, { modal: true }, 'Yes', 'No');
+            if (confirm !== 'Yes') {
+                return;
+            }
+            // Remove the job from the manifest
+            await manifestService.removeJob(jobId);
+            // Refresh the tree view
+            await jobTreeDataProvider.refresh();
+            vscode.window.showInformationMessage(`✓ Job ${jobId} removed from manifest`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to remove job: ${errorMessage}`);
+            console.error('Remove job error:', error);
+        }
+    });
+    // Register privacy policy command — opens PRIVACY.md in the built-in Markdown preview
+    const viewPrivacyPolicyDisposable = vscode.commands.registerCommand('codex-worker.viewPrivacyPolicy', async () => {
+        const privacyUri = vscode.Uri.joinPath(context.extensionUri, 'PRIVACY.md');
+        try {
+            await vscode.commands.executeCommand('markdown.showPreview', privacyUri);
+        }
+        catch {
+            // Fallback: open as a plain text file if Markdown preview is unavailable
+            const doc = await vscode.workspace.openTextDocument(privacyUri);
+            await vscode.window.showTextDocument(doc, { preview: true });
+        }
+    });
+    context.subscriptions.push(helloWorldDisposable, testGitLabDisposable, testManifestDisposable, testAudioDiscoveryDisposable, jobTreeDataProvider, treeView, refreshJobsDisposable, newJobDisposable, viewJobDetailDisposable, cancelJobDisposable, viewPrivacyPolicyDisposable);
+}
+// This method is called when your extension is deactivated
+function deactivate() {
+    console.log('Codex Worker extension is deactivating...');
+    // Null out global service references to allow garbage collection
+    gitLabService = undefined;
+    manifestService = undefined;
+    audioDiscoveryService = undefined;
+    preflightService = undefined;
+    jobTreeDataProvider = undefined;
+    console.log('Codex Worker extension deactivated.');
+}
+
+
+/***/ }),
+/* 1 */
+/***/ ((module) => {
+
+module.exports = require("vscode");
+
+/***/ }),
+/* 2 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GitLabService = void 0;
+const vscode = __importStar(__webpack_require__(1));
+const fs = __importStar(__webpack_require__(3));
+const path = __importStar(__webpack_require__(4));
+class GitLabService {
+    static DEFAULT_GITLAB_URL = 'https://git.genesisrnd.com';
+    static DEFAULT_WORKER_USER_ID = 551;
+    static DEVELOPER_ACCESS_LEVEL = 30;
+    frontierAPI = null;
+    /**
+     * Initialize connection to Frontier Authentication plugin
+     */
+    async initialize() {
+        const frontierExt = vscode.extensions.getExtension('frontier-rnd.frontier-authentication');
+        if (!frontierExt) {
+            throw new Error('Frontier Authentication plugin is not installed. Please install it to use GPU jobs.');
+        }
+        this.frontierAPI = await frontierExt.activate();
+        if (!this.frontierAPI) {
+            throw new Error('Failed to activate Frontier Authentication plugin.');
+        }
+    }
+    /**
+     * Get GitLab authentication token
+     */
+    async getToken() {
+        if (!this.frontierAPI) {
+            await this.initialize();
+        }
+        return this.frontierAPI.gitLabService.getToken();
+    }
+    /**
+     * Get GitLab base URL
+     */
+    getBaseUrl() {
+        if (!this.frontierAPI) {
+            throw new Error('GitLab service not initialized');
+        }
+        return this.frontierAPI.gitLabService.getBaseUrl();
+    }
+    /**
+     * Get worker user ID from settings or use default
+     */
+    getWorkerUserId() {
+        const config = vscode.workspace.getConfiguration('codex-worker');
+        return config.get('workerUserId', GitLabService.DEFAULT_WORKER_USER_ID);
+    }
+    /**
+     * Parse GitLab project ID from .git/config file
+     * Supports both HTTPS and SSH URLs
+     */
+    async getProjectIdFromWorkspace() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return null;
+        }
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        const gitConfigPath = path.join(workspaceRoot, '.git', 'config');
+        if (!fs.existsSync(gitConfigPath)) {
+            return null;
+        }
+        const gitConfig = fs.readFileSync(gitConfigPath, 'utf-8');
+        // Look for remote "origin" section and extract URL
+        // The URL might be on the same line or a subsequent line
+        const remoteSectionMatch = gitConfig.match(/\[remote "origin"\]([\s\S]*?)(?=\[|$)/);
+        if (!remoteSectionMatch) {
+            return null;
+        }
+        const remoteSection = remoteSectionMatch[1];
+        const urlMatch = remoteSection.match(/url\s*=\s*(.+)/);
+        if (!urlMatch) {
+            return null;
+        }
+        const remoteUrl = urlMatch[1].trim();
+        // Parse project path from URL
+        // HTTPS: https://git.genesisrnd.com/username/project-name.git
+        // SSH: git@git.genesisrnd.com:username/project-name.git
+        let projectPath = null;
+        if (remoteUrl.startsWith('https://')) {
+            const httpsMatch = remoteUrl.match(/https:\/\/[^\/]+\/(.+?)(?:\.git)?$/);
+            if (httpsMatch) {
+                projectPath = httpsMatch[1];
+            }
+        }
+        else if (remoteUrl.startsWith('git@')) {
+            const sshMatch = remoteUrl.match(/git@[^:]+:(.+?)(?:\.git)?$/);
+            if (sshMatch) {
+                projectPath = sshMatch[1];
+            }
+        }
+        if (!projectPath) {
+            return null;
+        }
+        // URL-encode the project path for GitLab API
+        return encodeURIComponent(projectPath);
+    }
+    /**
+     * Share the current workspace project with the GPU worker
+     */
+    async shareProjectWithWorker() {
+        const projectId = await this.getProjectIdFromWorkspace();
+        if (!projectId) {
+            throw new Error('No GitLab remote found. Please push your project to GitLab before creating GPU jobs.');
+        }
+        const token = await this.getToken();
+        const baseUrl = this.getBaseUrl();
+        const workerId = this.getWorkerUserId();
+        const url = `${baseUrl}/api/v4/projects/${projectId}/members`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: workerId,
+                access_level: GitLabService.DEVELOPER_ACCESS_LEVEL
+            })
+        });
+        if (!response.ok) {
+            // If user is already a member, that's fine
+            if (response.status === 409) {
+                console.log('Worker is already a member of this project');
+                return;
+            }
+            const errorText = await response.text();
+            throw new Error(`Failed to share project with worker: ${response.status} ${response.statusText}\n${errorText}`);
+        }
+        console.log('Successfully shared project with GPU worker');
+    }
+    /**
+     * Unshare the current workspace project from the GPU worker
+     */
+    async unshareProjectFromWorker() {
+        const projectId = await this.getProjectIdFromWorkspace();
+        if (!projectId) {
+            // If there's no GitLab remote, nothing to unshare
+            console.log('No GitLab remote found, nothing to unshare');
+            return;
+        }
+        const token = await this.getToken();
+        const baseUrl = this.getBaseUrl();
+        const workerId = this.getWorkerUserId();
+        const url = `${baseUrl}/api/v4/projects/${projectId}/members/${workerId}`;
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (!response.ok) {
+            // If user is not a member, that's fine
+            if (response.status === 404) {
+                console.log('Worker is not a member of this project');
+                return;
+            }
+            const errorText = await response.text();
+            throw new Error(`Failed to unshare project from worker: ${response.status} ${response.statusText}\n${errorText}`);
+        }
+        console.log('Successfully unshared project from GPU worker');
+    }
+    /**
+     * Check if the worker is currently a member of the project
+     */
+    async isWorkerMember() {
+        const projectId = await this.getProjectIdFromWorkspace();
+        if (!projectId) {
+            return false;
+        }
+        const token = await this.getToken();
+        const baseUrl = this.getBaseUrl();
+        const workerId = this.getWorkerUserId();
+        const url = `${baseUrl}/api/v4/projects/${projectId}/members/${workerId}`;
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        return response.ok;
+    }
+    /**
+     * Verify GitLab connectivity and authentication
+     */
+    async verifyConnection() {
+        try {
+            const token = await this.getToken();
+            const baseUrl = this.getBaseUrl();
+            const url = `${baseUrl}/api/v4/user`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            return response.ok;
+        }
+        catch (error) {
+            console.error('GitLab connection verification failed:', error);
+            return false;
+        }
+    }
+}
+exports.GitLabService = GitLabService;
+
+
+/***/ }),
+/* 3 */
+/***/ ((module) => {
+
+module.exports = require("fs");
+
+/***/ }),
+/* 4 */
+/***/ ((module) => {
+
+module.exports = require("path");
+
+/***/ }),
+/* 5 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ManifestService = void 0;
+const vscode = __importStar(__webpack_require__(1));
+const fs = __importStar(__webpack_require__(3));
+const path = __importStar(__webpack_require__(4));
+const yaml = __importStar(__webpack_require__(6));
+/**
+ * Service for managing the GPU jobs manifest file
+ */
+class ManifestService {
+    static MANIFEST_DIR = 'gpu_jobs';
+    static MANIFEST_FILE = 'manifest.yaml';
+    static MANIFEST_VERSION = 1;
+    /**
+     * Get the full path to the manifest file
+     */
+    getManifestPath() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return null;
+        }
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        return path.join(workspaceRoot, ManifestService.MANIFEST_DIR, ManifestService.MANIFEST_FILE);
+    }
+    /**
+     * Get the directory path for job folders
+     */
+    getJobsDirectory() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return null;
+        }
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        return path.join(workspaceRoot, ManifestService.MANIFEST_DIR);
+    }
+    /**
+     * Generate a unique job ID
+     */
+    generateJobId() {
+        // Generate a random unique ID using timestamp + random string
+        const timestamp = Date.now().toString(36);
+        const randomStr = Math.random().toString(36).substring(2, 15);
+        return `${timestamp}_${randomStr}`;
+    }
+    /**
+     * Read the manifest file
+     * Returns null if file doesn't exist
+     */
+    async readManifest() {
+        const manifestPath = this.getManifestPath();
+        if (!manifestPath) {
+            throw new Error('No workspace folder open');
+        }
+        if (!fs.existsSync(manifestPath)) {
+            return null;
+        }
+        try {
+            const content = fs.readFileSync(manifestPath, 'utf8');
+            const manifest = yaml.load(content);
+            // Validate manifest structure
+            this.validateManifest(manifest);
+            return manifest;
+        }
+        catch (error) {
+            throw new Error(`Failed to read manifest: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    /**
+     * Write the manifest file
+     */
+    async writeManifest(manifest) {
+        const manifestPath = this.getManifestPath();
+        if (!manifestPath) {
+            throw new Error('No workspace folder open');
+        }
+        // Validate before writing
+        this.validateManifest(manifest);
+        // Ensure directory exists
+        const manifestDir = path.dirname(manifestPath);
+        if (!fs.existsSync(manifestDir)) {
+            fs.mkdirSync(manifestDir, { recursive: true });
+        }
+        try {
+            const yamlContent = yaml.dump(manifest, {
+                indent: 2,
+                lineWidth: -1, // Don't wrap lines
+                noRefs: true
+            });
+            fs.writeFileSync(manifestPath, yamlContent, 'utf8');
+        }
+        catch (error) {
+            throw new Error(`Failed to write manifest: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    /**
+     * Create a new empty manifest
+     */
+    createEmptyManifest() {
+        return {
+            version: ManifestService.MANIFEST_VERSION,
+            jobs: []
+        };
+    }
+    /**
+     * Add a job to the manifest.
+     * Automatically sets submitted_at to the current ISO 8601 timestamp
+     * if it is not already provided.
+     */
+    async addJob(job) {
+        let manifest = await this.readManifest();
+        if (!manifest) {
+            manifest = this.createEmptyManifest();
+        }
+        // Check for duplicate job ID
+        if (manifest.jobs.some(j => j.job_id === job.job_id)) {
+            throw new Error(`Job with ID ${job.job_id} already exists`);
+        }
+        // Auto-populate submitted_at if not already set
+        if (!job.submitted_at) {
+            job.submitted_at = new Date().toISOString();
+        }
+        manifest.jobs.push(job);
+        await this.writeManifest(manifest);
+    }
+    /**
+     * Update an existing job in the manifest
+     */
+    async updateJob(jobId, updates) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            throw new Error('No manifest file exists');
+        }
+        const jobIndex = manifest.jobs.findIndex(j => j.job_id === jobId);
+        if (jobIndex === -1) {
+            throw new Error(`Job with ID ${jobId} not found`);
+        }
+        // Merge updates into existing job
+        manifest.jobs[jobIndex] = {
+            ...manifest.jobs[jobIndex],
+            ...updates,
+            job_id: jobId // Ensure job_id cannot be changed
+        };
+        await this.writeManifest(manifest);
+    }
+    /**
+     * Cancel a job by setting the canceled flag
+     */
+    async cancelJob(jobId) {
+        await this.updateJob(jobId, { canceled: true });
+    }
+    /**
+     * Remove a job from the manifest
+     */
+    async removeJob(jobId) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            throw new Error('No manifest file exists');
+        }
+        const jobIndex = manifest.jobs.findIndex(j => j.job_id === jobId);
+        if (jobIndex === -1) {
+            throw new Error(`Job with ID ${jobId} not found`);
+        }
+        // Remove the job from the array
+        manifest.jobs.splice(jobIndex, 1);
+        await this.writeManifest(manifest);
+    }
+    /**
+     * Delete the job folder from disk (gpu_jobs/job_<id>/).
+     * This removes the response file, model checkpoint, logs, and all other artifacts.
+     * Does nothing if the folder doesn't exist.
+     */
+    async deleteJobFolder(jobId) {
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            return;
+        }
+        const jobFolder = path.join(jobsDir, `job_${jobId}`);
+        if (!fs.existsSync(jobFolder)) {
+            return;
+        }
+        // Recursively delete the job folder
+        fs.rmSync(jobFolder, { recursive: true, force: true });
+    }
+    /**
+     * Get all jobs with their current state from filesystem
+     */
+    async getJobsWithState() {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            return [];
+        }
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            throw new Error('No workspace folder open');
+        }
+        return manifest.jobs.map(job => {
+            const state = this.determineJobState(job, jobsDir);
+            return {
+                ...job,
+                ...state
+            };
+        });
+    }
+    /**
+     * Determine job state from filesystem
+     */
+    determineJobState(job, jobsDir) {
+        const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
+        const responsePath = path.join(jobFolder, 'response.yaml');
+        // Check if job folder exists
+        if (!fs.existsSync(jobFolder)) {
+            return { state: 'pending' };
+        }
+        // Check if response file exists
+        if (!fs.existsSync(responsePath)) {
+            // Job folder exists but no response yet - assume running
+            return { state: 'running' };
+        }
+        // Read response file
+        try {
+            const responseContent = fs.readFileSync(responsePath, 'utf8');
+            const response = yaml.load(responseContent);
+            // Use response timestamp if available, otherwise fall back to file mtime
+            let responseTimestamp = response.timestamp;
+            if (!responseTimestamp) {
+                try {
+                    const stat = fs.statSync(responsePath);
+                    responseTimestamp = stat.mtime.toISOString();
+                }
+                catch {
+                    // Ignore stat errors
+                }
+            }
+            return {
+                state: response.state,
+                worker_id: response.worker_id,
+                epochs_completed: response.epochs_completed,
+                error_message: response.error_message,
+                response_timestamp: responseTimestamp
+            };
+        }
+        catch (error) {
+            // If we can't read the response, assume running
+            return { state: 'running' };
+        }
+    }
+    /**
+     * Validate manifest structure
+     */
+    validateManifest(manifest) {
+        if (!manifest || typeof manifest !== 'object') {
+            throw new Error('Invalid manifest: must be an object');
+        }
+        if (typeof manifest.version !== 'number') {
+            throw new Error('Invalid manifest: version must be a number');
+        }
+        if (manifest.version !== ManifestService.MANIFEST_VERSION) {
+            throw new Error(`Unsupported manifest version: ${manifest.version} (expected ${ManifestService.MANIFEST_VERSION})`);
+        }
+        if (!Array.isArray(manifest.jobs)) {
+            throw new Error('Invalid manifest: jobs must be an array');
+        }
+        // Validate each job
+        manifest.jobs.forEach((job, index) => {
+            this.validateJob(job, index);
+        });
+    }
+    /**
+     * Validate individual job structure
+     */
+    validateJob(job, index) {
+        const prefix = `Invalid job at index ${index}`;
+        if (!job || typeof job !== 'object') {
+            throw new Error(`${prefix}: must be an object`);
+        }
+        if (typeof job.job_id !== 'string' || !job.job_id) {
+            throw new Error(`${prefix}: job_id must be a non-empty string`);
+        }
+        const validJobTypes = ['tts', 'asr'];
+        if (!validJobTypes.includes(job.job_type)) {
+            throw new Error(`${prefix}: job_type must be one of ${validJobTypes.join(', ')}`);
+        }
+        const validModes = ['training', 'inference', 'training_and_inference'];
+        if (!validModes.includes(job.mode)) {
+            throw new Error(`${prefix}: mode must be one of ${validModes.join(', ')}`);
+        }
+        if (!job.model || typeof job.model !== 'object') {
+            throw new Error(`${prefix}: model must be an object`);
+        }
+        if (typeof job.model.type !== 'string' || !job.model.type) {
+            throw new Error(`${prefix}: model.type must be a non-empty string`);
+        }
+        // Optional field validations
+        if (job.epochs !== undefined && (typeof job.epochs !== 'number' || job.epochs <= 0)) {
+            throw new Error(`${prefix}: epochs must be a positive number`);
+        }
+        if (job.canceled !== undefined && typeof job.canceled !== 'boolean') {
+            throw new Error(`${prefix}: canceled must be a boolean`);
+        }
+    }
+    /**
+     * Check if manifest file exists
+     */
+    async manifestExists() {
+        const manifestPath = this.getManifestPath();
+        if (!manifestPath) {
+            return false;
+        }
+        return fs.existsSync(manifestPath);
+    }
+    /**
+     * Get a specific job by ID
+     */
+    async getJob(jobId) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            return null;
+        }
+        return manifest.jobs.find(j => j.job_id === jobId) || null;
+    }
+    /**
+     * Discover available checkpoints from completed jobs that match a given model type.
+     * Reads result.checkpoint_path from each job's response.yaml.
+     */
+    async getAvailableCheckpoints(modelType) {
+        const manifest = await this.readManifest();
+        if (!manifest) {
+            return [];
+        }
+        const jobsDir = this.getJobsDirectory();
+        if (!jobsDir) {
+            return [];
+        }
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+            return [];
+        }
+        const checkpoints = [];
+        for (const job of manifest.jobs) {
+            // Filter by model type
+            if (job.model.type !== modelType) {
+                continue;
+            }
+            const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
+            const responsePath = path.join(jobFolder, 'response.yaml');
+            // Check if response file exists
+            if (!fs.existsSync(responsePath)) {
+                continue;
+            }
+            try {
+                const responseContent = fs.readFileSync(responsePath, 'utf8');
+                const response = yaml.load(responseContent);
+                // Only include completed jobs
+                if (response.state !== 'completed') {
+                    continue;
+                }
+                // Check for checkpoint path in result
+                const checkpointPath = response.result?.checkpoint_path;
+                if (!checkpointPath) {
+                    continue;
+                }
+                // Verify the checkpoint file actually exists
+                const absoluteCheckpointPath = path.resolve(workspaceRoot, checkpointPath);
+                if (!fs.existsSync(absoluteCheckpointPath)) {
+                    continue;
+                }
+                // Determine timestamp: prefer response.yaml timestamp, fall back to file mtime
+                let timestamp;
+                let fileTimestamp;
+                if (response.timestamp) {
+                    // Validate the timestamp is parseable
+                    const parsed = new Date(response.timestamp);
+                    if (!isNaN(parsed.getTime())) {
+                        timestamp = response.timestamp;
+                    }
+                }
+                // Always get file timestamp as fallback
+                try {
+                    const stat = fs.statSync(responsePath);
+                    fileTimestamp = stat.mtime;
+                }
+                catch {
+                    // Ignore stat errors
+                }
+                // If no valid timestamp from response, use file timestamp
+                if (!timestamp && fileTimestamp) {
+                    timestamp = fileTimestamp.toISOString();
+                }
+                // Determine if the job had verse filtering (training or inference)
+                const filtered = !!(job.training?.include_verses?.length ||
+                    job.training?.exclude_verses?.length ||
+                    job.inference?.include_verses?.length ||
+                    job.inference?.exclude_verses?.length);
+                checkpoints.push({
+                    jobId: job.job_id,
+                    jobName: job.name,
+                    checkpointPath,
+                    modelType: job.model.type,
+                    epochs: job.epochs,
+                    timestamp,
+                    fileTimestamp,
+                    filtered
+                });
+            }
+            catch {
+                // Skip jobs with unreadable response files
+                continue;
+            }
+        }
+        // Sort by timestamp descending (newest first)
+        checkpoints.sort((a, b) => {
+            const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return dateB - dateA;
+        });
+        return checkpoints;
+    }
+}
+exports.ManifestService = ManifestService;
+
+
+/***/ }),
+/* 6 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+
+var loader = __webpack_require__(7);
+var dumper = __webpack_require__(30);
+
+
+function renamed(from, to) {
+  return function () {
+    throw new Error('Function yaml.' + from + ' is removed in js-yaml 4. ' +
+      'Use yaml.' + to + ' instead, which is now safe by default.');
+  };
+}
+
+
+module.exports.Type = __webpack_require__(16);
+module.exports.Schema = __webpack_require__(15);
+module.exports.FAILSAFE_SCHEMA = __webpack_require__(14);
+module.exports.JSON_SCHEMA = __webpack_require__(13);
+module.exports.CORE_SCHEMA = __webpack_require__(12);
+module.exports.DEFAULT_SCHEMA = __webpack_require__(11);
+module.exports.load                = loader.load;
+module.exports.loadAll             = loader.loadAll;
+module.exports.dump                = dumper.dump;
+module.exports.YAMLException = __webpack_require__(9);
+
+// Re-export all types in case user wants to create custom schema
+module.exports.types = {
+  binary:    __webpack_require__(26),
+  float:     __webpack_require__(23),
+  map:       __webpack_require__(19),
+  null:      __webpack_require__(20),
+  pairs:     __webpack_require__(28),
+  set:       __webpack_require__(29),
+  timestamp: __webpack_require__(24),
+  bool:      __webpack_require__(21),
+  int:       __webpack_require__(22),
+  merge:     __webpack_require__(25),
+  omap:      __webpack_require__(27),
+  seq:       __webpack_require__(18),
+  str:       __webpack_require__(17)
+};
+
+// Removed functions from JS-YAML 3.0.x
+module.exports.safeLoad            = renamed('safeLoad', 'load');
+module.exports.safeLoadAll         = renamed('safeLoadAll', 'loadAll');
+module.exports.safeDump            = renamed('safeDump', 'dump');
+
+
+/***/ }),
+/* 7 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+/*eslint-disable max-len,no-use-before-define*/
+
+var common              = __webpack_require__(8);
+var YAMLException       = __webpack_require__(9);
+var makeSnippet         = __webpack_require__(10);
+var DEFAULT_SCHEMA      = __webpack_require__(11);
+
+
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+
+
+var CONTEXT_FLOW_IN   = 1;
+var CONTEXT_FLOW_OUT  = 2;
+var CONTEXT_BLOCK_IN  = 3;
+var CONTEXT_BLOCK_OUT = 4;
+
+
+var CHOMPING_CLIP  = 1;
+var CHOMPING_STRIP = 2;
+var CHOMPING_KEEP  = 3;
+
+
+var PATTERN_NON_PRINTABLE         = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/;
+var PATTERN_NON_ASCII_LINE_BREAKS = /[\x85\u2028\u2029]/;
+var PATTERN_FLOW_INDICATORS       = /[,\[\]\{\}]/;
+var PATTERN_TAG_HANDLE            = /^(?:!|!!|![a-z\-]+!)$/i;
+var PATTERN_TAG_URI               = /^(?:!|[^,\[\]\{\}])(?:%[0-9a-f]{2}|[0-9a-z\-#;\/\?:@&=\+\$,_\.!~\*'\(\)\[\]])*$/i;
+
+
+function _class(obj) { return Object.prototype.toString.call(obj); }
+
+function is_EOL(c) {
+  return (c === 0x0A/* LF */) || (c === 0x0D/* CR */);
+}
+
+function is_WHITE_SPACE(c) {
+  return (c === 0x09/* Tab */) || (c === 0x20/* Space */);
+}
+
+function is_WS_OR_EOL(c) {
+  return (c === 0x09/* Tab */) ||
+         (c === 0x20/* Space */) ||
+         (c === 0x0A/* LF */) ||
+         (c === 0x0D/* CR */);
+}
+
+function is_FLOW_INDICATOR(c) {
+  return c === 0x2C/* , */ ||
+         c === 0x5B/* [ */ ||
+         c === 0x5D/* ] */ ||
+         c === 0x7B/* { */ ||
+         c === 0x7D/* } */;
+}
+
+function fromHexCode(c) {
+  var lc;
+
+  if ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */)) {
+    return c - 0x30;
+  }
+
+  /*eslint-disable no-bitwise*/
+  lc = c | 0x20;
+
+  if ((0x61/* a */ <= lc) && (lc <= 0x66/* f */)) {
+    return lc - 0x61 + 10;
+  }
+
+  return -1;
+}
+
+function escapedHexLen(c) {
+  if (c === 0x78/* x */) { return 2; }
+  if (c === 0x75/* u */) { return 4; }
+  if (c === 0x55/* U */) { return 8; }
+  return 0;
+}
+
+function fromDecimalCode(c) {
+  if ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */)) {
+    return c - 0x30;
+  }
+
+  return -1;
+}
+
+function simpleEscapeSequence(c) {
+  /* eslint-disable indent */
+  return (c === 0x30/* 0 */) ? '\x00' :
+        (c === 0x61/* a */) ? '\x07' :
+        (c === 0x62/* b */) ? '\x08' :
+        (c === 0x74/* t */) ? '\x09' :
+        (c === 0x09/* Tab */) ? '\x09' :
+        (c === 0x6E/* n */) ? '\x0A' :
+        (c === 0x76/* v */) ? '\x0B' :
+        (c === 0x66/* f */) ? '\x0C' :
+        (c === 0x72/* r */) ? '\x0D' :
+        (c === 0x65/* e */) ? '\x1B' :
+        (c === 0x20/* Space */) ? ' ' :
+        (c === 0x22/* " */) ? '\x22' :
+        (c === 0x2F/* / */) ? '/' :
+        (c === 0x5C/* \ */) ? '\x5C' :
+        (c === 0x4E/* N */) ? '\x85' :
+        (c === 0x5F/* _ */) ? '\xA0' :
+        (c === 0x4C/* L */) ? '\u2028' :
+        (c === 0x50/* P */) ? '\u2029' : '';
+}
+
+function charFromCodepoint(c) {
+  if (c <= 0xFFFF) {
+    return String.fromCharCode(c);
+  }
+  // Encode UTF-16 surrogate pair
+  // https://en.wikipedia.org/wiki/UTF-16#Code_points_U.2B010000_to_U.2B10FFFF
+  return String.fromCharCode(
+    ((c - 0x010000) >> 10) + 0xD800,
+    ((c - 0x010000) & 0x03FF) + 0xDC00
+  );
+}
+
+// set a property of a literal object, while protecting against prototype pollution,
+// see https://github.com/nodeca/js-yaml/issues/164 for more details
+function setProperty(object, key, value) {
+  // used for this specific key only because Object.defineProperty is slow
+  if (key === '__proto__') {
+    Object.defineProperty(object, key, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: value
+    });
+  } else {
+    object[key] = value;
+  }
+}
+
+var simpleEscapeCheck = new Array(256); // integer, for fast access
+var simpleEscapeMap = new Array(256);
+for (var i = 0; i < 256; i++) {
+  simpleEscapeCheck[i] = simpleEscapeSequence(i) ? 1 : 0;
+  simpleEscapeMap[i] = simpleEscapeSequence(i);
+}
+
+
+function State(input, options) {
+  this.input = input;
+
+  this.filename  = options['filename']  || null;
+  this.schema    = options['schema']    || DEFAULT_SCHEMA;
+  this.onWarning = options['onWarning'] || null;
+  // (Hidden) Remove? makes the loader to expect YAML 1.1 documents
+  // if such documents have no explicit %YAML directive
+  this.legacy    = options['legacy']    || false;
+
+  this.json      = options['json']      || false;
+  this.listener  = options['listener']  || null;
+
+  this.implicitTypes = this.schema.compiledImplicit;
+  this.typeMap       = this.schema.compiledTypeMap;
+
+  this.length     = input.length;
+  this.position   = 0;
+  this.line       = 0;
+  this.lineStart  = 0;
+  this.lineIndent = 0;
+
+  // position of first leading tab in the current line,
+  // used to make sure there are no tabs in the indentation
+  this.firstTabInLine = -1;
+
+  this.documents = [];
+
+  /*
+  this.version;
+  this.checkLineBreaks;
+  this.tagMap;
+  this.anchorMap;
+  this.tag;
+  this.anchor;
+  this.kind;
+  this.result;*/
+
+}
+
+
+function generateError(state, message) {
+  var mark = {
+    name:     state.filename,
+    buffer:   state.input.slice(0, -1), // omit trailing \0
+    position: state.position,
+    line:     state.line,
+    column:   state.position - state.lineStart
+  };
+
+  mark.snippet = makeSnippet(mark);
+
+  return new YAMLException(message, mark);
+}
+
+function throwError(state, message) {
+  throw generateError(state, message);
+}
+
+function throwWarning(state, message) {
+  if (state.onWarning) {
+    state.onWarning.call(null, generateError(state, message));
+  }
+}
+
+
+var directiveHandlers = {
+
+  YAML: function handleYamlDirective(state, name, args) {
+
+    var match, major, minor;
+
+    if (state.version !== null) {
+      throwError(state, 'duplication of %YAML directive');
+    }
+
+    if (args.length !== 1) {
+      throwError(state, 'YAML directive accepts exactly one argument');
+    }
+
+    match = /^([0-9]+)\.([0-9]+)$/.exec(args[0]);
+
+    if (match === null) {
+      throwError(state, 'ill-formed argument of the YAML directive');
+    }
+
+    major = parseInt(match[1], 10);
+    minor = parseInt(match[2], 10);
+
+    if (major !== 1) {
+      throwError(state, 'unacceptable YAML version of the document');
+    }
+
+    state.version = args[0];
+    state.checkLineBreaks = (minor < 2);
+
+    if (minor !== 1 && minor !== 2) {
+      throwWarning(state, 'unsupported YAML version of the document');
+    }
+  },
+
+  TAG: function handleTagDirective(state, name, args) {
+
+    var handle, prefix;
+
+    if (args.length !== 2) {
+      throwError(state, 'TAG directive accepts exactly two arguments');
+    }
+
+    handle = args[0];
+    prefix = args[1];
+
+    if (!PATTERN_TAG_HANDLE.test(handle)) {
+      throwError(state, 'ill-formed tag handle (first argument) of the TAG directive');
+    }
+
+    if (_hasOwnProperty.call(state.tagMap, handle)) {
+      throwError(state, 'there is a previously declared suffix for "' + handle + '" tag handle');
+    }
+
+    if (!PATTERN_TAG_URI.test(prefix)) {
+      throwError(state, 'ill-formed tag prefix (second argument) of the TAG directive');
+    }
+
+    try {
+      prefix = decodeURIComponent(prefix);
+    } catch (err) {
+      throwError(state, 'tag prefix is malformed: ' + prefix);
+    }
+
+    state.tagMap[handle] = prefix;
+  }
+};
+
+
+function captureSegment(state, start, end, checkJson) {
+  var _position, _length, _character, _result;
+
+  if (start < end) {
+    _result = state.input.slice(start, end);
+
+    if (checkJson) {
+      for (_position = 0, _length = _result.length; _position < _length; _position += 1) {
+        _character = _result.charCodeAt(_position);
+        if (!(_character === 0x09 ||
+              (0x20 <= _character && _character <= 0x10FFFF))) {
+          throwError(state, 'expected valid JSON character');
+        }
+      }
+    } else if (PATTERN_NON_PRINTABLE.test(_result)) {
+      throwError(state, 'the stream contains non-printable characters');
+    }
+
+    state.result += _result;
+  }
+}
+
+function mergeMappings(state, destination, source, overridableKeys) {
+  var sourceKeys, key, index, quantity;
+
+  if (!common.isObject(source)) {
+    throwError(state, 'cannot merge mappings; the provided source object is unacceptable');
+  }
+
+  sourceKeys = Object.keys(source);
+
+  for (index = 0, quantity = sourceKeys.length; index < quantity; index += 1) {
+    key = sourceKeys[index];
+
+    if (!_hasOwnProperty.call(destination, key)) {
+      setProperty(destination, key, source[key]);
+      overridableKeys[key] = true;
+    }
+  }
+}
+
+function storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, valueNode,
+  startLine, startLineStart, startPos) {
+
+  var index, quantity;
+
+  // The output is a plain object here, so keys can only be strings.
+  // We need to convert keyNode to a string, but doing so can hang the process
+  // (deeply nested arrays that explode exponentially using aliases).
+  if (Array.isArray(keyNode)) {
+    keyNode = Array.prototype.slice.call(keyNode);
+
+    for (index = 0, quantity = keyNode.length; index < quantity; index += 1) {
+      if (Array.isArray(keyNode[index])) {
+        throwError(state, 'nested arrays are not supported inside keys');
+      }
+
+      if (typeof keyNode === 'object' && _class(keyNode[index]) === '[object Object]') {
+        keyNode[index] = '[object Object]';
+      }
+    }
+  }
+
+  // Avoid code execution in load() via toString property
+  // (still use its own toString for arrays, timestamps,
+  // and whatever user schema extensions happen to have @@toStringTag)
+  if (typeof keyNode === 'object' && _class(keyNode) === '[object Object]') {
+    keyNode = '[object Object]';
+  }
+
+
+  keyNode = String(keyNode);
+
+  if (_result === null) {
+    _result = {};
+  }
+
+  if (keyTag === 'tag:yaml.org,2002:merge') {
+    if (Array.isArray(valueNode)) {
+      for (index = 0, quantity = valueNode.length; index < quantity; index += 1) {
+        mergeMappings(state, _result, valueNode[index], overridableKeys);
+      }
+    } else {
+      mergeMappings(state, _result, valueNode, overridableKeys);
+    }
+  } else {
+    if (!state.json &&
+        !_hasOwnProperty.call(overridableKeys, keyNode) &&
+        _hasOwnProperty.call(_result, keyNode)) {
+      state.line = startLine || state.line;
+      state.lineStart = startLineStart || state.lineStart;
+      state.position = startPos || state.position;
+      throwError(state, 'duplicated mapping key');
+    }
+
+    setProperty(_result, keyNode, valueNode);
+    delete overridableKeys[keyNode];
+  }
+
+  return _result;
+}
+
+function readLineBreak(state) {
+  var ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch === 0x0A/* LF */) {
+    state.position++;
+  } else if (ch === 0x0D/* CR */) {
+    state.position++;
+    if (state.input.charCodeAt(state.position) === 0x0A/* LF */) {
+      state.position++;
+    }
+  } else {
+    throwError(state, 'a line break is expected');
+  }
+
+  state.line += 1;
+  state.lineStart = state.position;
+  state.firstTabInLine = -1;
+}
+
+function skipSeparationSpace(state, allowComments, checkIndent) {
+  var lineBreaks = 0,
+      ch = state.input.charCodeAt(state.position);
+
+  while (ch !== 0) {
+    while (is_WHITE_SPACE(ch)) {
+      if (ch === 0x09/* Tab */ && state.firstTabInLine === -1) {
+        state.firstTabInLine = state.position;
+      }
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    if (allowComments && ch === 0x23/* # */) {
+      do {
+        ch = state.input.charCodeAt(++state.position);
+      } while (ch !== 0x0A/* LF */ && ch !== 0x0D/* CR */ && ch !== 0);
+    }
+
+    if (is_EOL(ch)) {
+      readLineBreak(state);
+
+      ch = state.input.charCodeAt(state.position);
+      lineBreaks++;
+      state.lineIndent = 0;
+
+      while (ch === 0x20/* Space */) {
+        state.lineIndent++;
+        ch = state.input.charCodeAt(++state.position);
+      }
+    } else {
+      break;
+    }
+  }
+
+  if (checkIndent !== -1 && lineBreaks !== 0 && state.lineIndent < checkIndent) {
+    throwWarning(state, 'deficient indentation');
+  }
+
+  return lineBreaks;
+}
+
+function testDocumentSeparator(state) {
+  var _position = state.position,
+      ch;
+
+  ch = state.input.charCodeAt(_position);
+
+  // Condition state.position === state.lineStart is tested
+  // in parent on each call, for efficiency. No needs to test here again.
+  if ((ch === 0x2D/* - */ || ch === 0x2E/* . */) &&
+      ch === state.input.charCodeAt(_position + 1) &&
+      ch === state.input.charCodeAt(_position + 2)) {
+
+    _position += 3;
+
+    ch = state.input.charCodeAt(_position);
+
+    if (ch === 0 || is_WS_OR_EOL(ch)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function writeFoldedLines(state, count) {
+  if (count === 1) {
+    state.result += ' ';
+  } else if (count > 1) {
+    state.result += common.repeat('\n', count - 1);
+  }
+}
+
+
+function readPlainScalar(state, nodeIndent, withinFlowCollection) {
+  var preceding,
+      following,
+      captureStart,
+      captureEnd,
+      hasPendingContent,
+      _line,
+      _lineStart,
+      _lineIndent,
+      _kind = state.kind,
+      _result = state.result,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (is_WS_OR_EOL(ch)      ||
+      is_FLOW_INDICATOR(ch) ||
+      ch === 0x23/* # */    ||
+      ch === 0x26/* & */    ||
+      ch === 0x2A/* * */    ||
+      ch === 0x21/* ! */    ||
+      ch === 0x7C/* | */    ||
+      ch === 0x3E/* > */    ||
+      ch === 0x27/* ' */    ||
+      ch === 0x22/* " */    ||
+      ch === 0x25/* % */    ||
+      ch === 0x40/* @ */    ||
+      ch === 0x60/* ` */) {
+    return false;
+  }
+
+  if (ch === 0x3F/* ? */ || ch === 0x2D/* - */) {
+    following = state.input.charCodeAt(state.position + 1);
+
+    if (is_WS_OR_EOL(following) ||
+        withinFlowCollection && is_FLOW_INDICATOR(following)) {
+      return false;
+    }
+  }
+
+  state.kind = 'scalar';
+  state.result = '';
+  captureStart = captureEnd = state.position;
+  hasPendingContent = false;
+
+  while (ch !== 0) {
+    if (ch === 0x3A/* : */) {
+      following = state.input.charCodeAt(state.position + 1);
+
+      if (is_WS_OR_EOL(following) ||
+          withinFlowCollection && is_FLOW_INDICATOR(following)) {
+        break;
+      }
+
+    } else if (ch === 0x23/* # */) {
+      preceding = state.input.charCodeAt(state.position - 1);
+
+      if (is_WS_OR_EOL(preceding)) {
+        break;
+      }
+
+    } else if ((state.position === state.lineStart && testDocumentSeparator(state)) ||
+               withinFlowCollection && is_FLOW_INDICATOR(ch)) {
+      break;
+
+    } else if (is_EOL(ch)) {
+      _line = state.line;
+      _lineStart = state.lineStart;
+      _lineIndent = state.lineIndent;
+      skipSeparationSpace(state, false, -1);
+
+      if (state.lineIndent >= nodeIndent) {
+        hasPendingContent = true;
+        ch = state.input.charCodeAt(state.position);
+        continue;
+      } else {
+        state.position = captureEnd;
+        state.line = _line;
+        state.lineStart = _lineStart;
+        state.lineIndent = _lineIndent;
+        break;
+      }
+    }
+
+    if (hasPendingContent) {
+      captureSegment(state, captureStart, captureEnd, false);
+      writeFoldedLines(state, state.line - _line);
+      captureStart = captureEnd = state.position;
+      hasPendingContent = false;
+    }
+
+    if (!is_WHITE_SPACE(ch)) {
+      captureEnd = state.position + 1;
+    }
+
+    ch = state.input.charCodeAt(++state.position);
+  }
+
+  captureSegment(state, captureStart, captureEnd, false);
+
+  if (state.result) {
+    return true;
+  }
+
+  state.kind = _kind;
+  state.result = _result;
+  return false;
+}
+
+function readSingleQuotedScalar(state, nodeIndent) {
+  var ch,
+      captureStart, captureEnd;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x27/* ' */) {
+    return false;
+  }
+
+  state.kind = 'scalar';
+  state.result = '';
+  state.position++;
+  captureStart = captureEnd = state.position;
+
+  while ((ch = state.input.charCodeAt(state.position)) !== 0) {
+    if (ch === 0x27/* ' */) {
+      captureSegment(state, captureStart, state.position, true);
+      ch = state.input.charCodeAt(++state.position);
+
+      if (ch === 0x27/* ' */) {
+        captureStart = state.position;
+        state.position++;
+        captureEnd = state.position;
+      } else {
+        return true;
+      }
+
+    } else if (is_EOL(ch)) {
+      captureSegment(state, captureStart, captureEnd, true);
+      writeFoldedLines(state, skipSeparationSpace(state, false, nodeIndent));
+      captureStart = captureEnd = state.position;
+
+    } else if (state.position === state.lineStart && testDocumentSeparator(state)) {
+      throwError(state, 'unexpected end of the document within a single quoted scalar');
+
+    } else {
+      state.position++;
+      captureEnd = state.position;
+    }
+  }
+
+  throwError(state, 'unexpected end of the stream within a single quoted scalar');
+}
+
+function readDoubleQuotedScalar(state, nodeIndent) {
+  var captureStart,
+      captureEnd,
+      hexLength,
+      hexResult,
+      tmp,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x22/* " */) {
+    return false;
+  }
+
+  state.kind = 'scalar';
+  state.result = '';
+  state.position++;
+  captureStart = captureEnd = state.position;
+
+  while ((ch = state.input.charCodeAt(state.position)) !== 0) {
+    if (ch === 0x22/* " */) {
+      captureSegment(state, captureStart, state.position, true);
+      state.position++;
+      return true;
+
+    } else if (ch === 0x5C/* \ */) {
+      captureSegment(state, captureStart, state.position, true);
+      ch = state.input.charCodeAt(++state.position);
+
+      if (is_EOL(ch)) {
+        skipSeparationSpace(state, false, nodeIndent);
+
+        // TODO: rework to inline fn with no type cast?
+      } else if (ch < 256 && simpleEscapeCheck[ch]) {
+        state.result += simpleEscapeMap[ch];
+        state.position++;
+
+      } else if ((tmp = escapedHexLen(ch)) > 0) {
+        hexLength = tmp;
+        hexResult = 0;
+
+        for (; hexLength > 0; hexLength--) {
+          ch = state.input.charCodeAt(++state.position);
+
+          if ((tmp = fromHexCode(ch)) >= 0) {
+            hexResult = (hexResult << 4) + tmp;
+
+          } else {
+            throwError(state, 'expected hexadecimal character');
+          }
+        }
+
+        state.result += charFromCodepoint(hexResult);
+
+        state.position++;
+
+      } else {
+        throwError(state, 'unknown escape sequence');
+      }
+
+      captureStart = captureEnd = state.position;
+
+    } else if (is_EOL(ch)) {
+      captureSegment(state, captureStart, captureEnd, true);
+      writeFoldedLines(state, skipSeparationSpace(state, false, nodeIndent));
+      captureStart = captureEnd = state.position;
+
+    } else if (state.position === state.lineStart && testDocumentSeparator(state)) {
+      throwError(state, 'unexpected end of the document within a double quoted scalar');
+
+    } else {
+      state.position++;
+      captureEnd = state.position;
+    }
+  }
+
+  throwError(state, 'unexpected end of the stream within a double quoted scalar');
+}
+
+function readFlowCollection(state, nodeIndent) {
+  var readNext = true,
+      _line,
+      _lineStart,
+      _pos,
+      _tag     = state.tag,
+      _result,
+      _anchor  = state.anchor,
+      following,
+      terminator,
+      isPair,
+      isExplicitPair,
+      isMapping,
+      overridableKeys = Object.create(null),
+      keyNode,
+      keyTag,
+      valueNode,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch === 0x5B/* [ */) {
+    terminator = 0x5D;/* ] */
+    isMapping = false;
+    _result = [];
+  } else if (ch === 0x7B/* { */) {
+    terminator = 0x7D;/* } */
+    isMapping = true;
+    _result = {};
+  } else {
+    return false;
+  }
+
+  if (state.anchor !== null) {
+    state.anchorMap[state.anchor] = _result;
+  }
+
+  ch = state.input.charCodeAt(++state.position);
+
+  while (ch !== 0) {
+    skipSeparationSpace(state, true, nodeIndent);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if (ch === terminator) {
+      state.position++;
+      state.tag = _tag;
+      state.anchor = _anchor;
+      state.kind = isMapping ? 'mapping' : 'sequence';
+      state.result = _result;
+      return true;
+    } else if (!readNext) {
+      throwError(state, 'missed comma between flow collection entries');
+    } else if (ch === 0x2C/* , */) {
+      // "flow collection entries can never be completely empty", as per YAML 1.2, section 7.4
+      throwError(state, "expected the node content, but found ','");
+    }
+
+    keyTag = keyNode = valueNode = null;
+    isPair = isExplicitPair = false;
+
+    if (ch === 0x3F/* ? */) {
+      following = state.input.charCodeAt(state.position + 1);
+
+      if (is_WS_OR_EOL(following)) {
+        isPair = isExplicitPair = true;
+        state.position++;
+        skipSeparationSpace(state, true, nodeIndent);
+      }
+    }
+
+    _line = state.line; // Save the current line.
+    _lineStart = state.lineStart;
+    _pos = state.position;
+    composeNode(state, nodeIndent, CONTEXT_FLOW_IN, false, true);
+    keyTag = state.tag;
+    keyNode = state.result;
+    skipSeparationSpace(state, true, nodeIndent);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if ((isExplicitPair || state.line === _line) && ch === 0x3A/* : */) {
+      isPair = true;
+      ch = state.input.charCodeAt(++state.position);
+      skipSeparationSpace(state, true, nodeIndent);
+      composeNode(state, nodeIndent, CONTEXT_FLOW_IN, false, true);
+      valueNode = state.result;
+    }
+
+    if (isMapping) {
+      storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, valueNode, _line, _lineStart, _pos);
+    } else if (isPair) {
+      _result.push(storeMappingPair(state, null, overridableKeys, keyTag, keyNode, valueNode, _line, _lineStart, _pos));
+    } else {
+      _result.push(keyNode);
+    }
+
+    skipSeparationSpace(state, true, nodeIndent);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if (ch === 0x2C/* , */) {
+      readNext = true;
+      ch = state.input.charCodeAt(++state.position);
+    } else {
+      readNext = false;
+    }
+  }
+
+  throwError(state, 'unexpected end of the stream within a flow collection');
+}
+
+function readBlockScalar(state, nodeIndent) {
+  var captureStart,
+      folding,
+      chomping       = CHOMPING_CLIP,
+      didReadContent = false,
+      detectedIndent = false,
+      textIndent     = nodeIndent,
+      emptyLines     = 0,
+      atMoreIndented = false,
+      tmp,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch === 0x7C/* | */) {
+    folding = false;
+  } else if (ch === 0x3E/* > */) {
+    folding = true;
+  } else {
+    return false;
+  }
+
+  state.kind = 'scalar';
+  state.result = '';
+
+  while (ch !== 0) {
+    ch = state.input.charCodeAt(++state.position);
+
+    if (ch === 0x2B/* + */ || ch === 0x2D/* - */) {
+      if (CHOMPING_CLIP === chomping) {
+        chomping = (ch === 0x2B/* + */) ? CHOMPING_KEEP : CHOMPING_STRIP;
+      } else {
+        throwError(state, 'repeat of a chomping mode identifier');
+      }
+
+    } else if ((tmp = fromDecimalCode(ch)) >= 0) {
+      if (tmp === 0) {
+        throwError(state, 'bad explicit indentation width of a block scalar; it cannot be less than one');
+      } else if (!detectedIndent) {
+        textIndent = nodeIndent + tmp - 1;
+        detectedIndent = true;
+      } else {
+        throwError(state, 'repeat of an indentation width identifier');
+      }
+
+    } else {
+      break;
+    }
+  }
+
+  if (is_WHITE_SPACE(ch)) {
+    do { ch = state.input.charCodeAt(++state.position); }
+    while (is_WHITE_SPACE(ch));
+
+    if (ch === 0x23/* # */) {
+      do { ch = state.input.charCodeAt(++state.position); }
+      while (!is_EOL(ch) && (ch !== 0));
+    }
+  }
+
+  while (ch !== 0) {
+    readLineBreak(state);
+    state.lineIndent = 0;
+
+    ch = state.input.charCodeAt(state.position);
+
+    while ((!detectedIndent || state.lineIndent < textIndent) &&
+           (ch === 0x20/* Space */)) {
+      state.lineIndent++;
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    if (!detectedIndent && state.lineIndent > textIndent) {
+      textIndent = state.lineIndent;
+    }
+
+    if (is_EOL(ch)) {
+      emptyLines++;
+      continue;
+    }
+
+    // End of the scalar.
+    if (state.lineIndent < textIndent) {
+
+      // Perform the chomping.
+      if (chomping === CHOMPING_KEEP) {
+        state.result += common.repeat('\n', didReadContent ? 1 + emptyLines : emptyLines);
+      } else if (chomping === CHOMPING_CLIP) {
+        if (didReadContent) { // i.e. only if the scalar is not empty.
+          state.result += '\n';
+        }
+      }
+
+      // Break this `while` cycle and go to the funciton's epilogue.
+      break;
+    }
+
+    // Folded style: use fancy rules to handle line breaks.
+    if (folding) {
+
+      // Lines starting with white space characters (more-indented lines) are not folded.
+      if (is_WHITE_SPACE(ch)) {
+        atMoreIndented = true;
+        // except for the first content line (cf. Example 8.1)
+        state.result += common.repeat('\n', didReadContent ? 1 + emptyLines : emptyLines);
+
+      // End of more-indented block.
+      } else if (atMoreIndented) {
+        atMoreIndented = false;
+        state.result += common.repeat('\n', emptyLines + 1);
+
+      // Just one line break - perceive as the same line.
+      } else if (emptyLines === 0) {
+        if (didReadContent) { // i.e. only if we have already read some scalar content.
+          state.result += ' ';
+        }
+
+      // Several line breaks - perceive as different lines.
+      } else {
+        state.result += common.repeat('\n', emptyLines);
+      }
+
+    // Literal style: just add exact number of line breaks between content lines.
+    } else {
+      // Keep all line breaks except the header line break.
+      state.result += common.repeat('\n', didReadContent ? 1 + emptyLines : emptyLines);
+    }
+
+    didReadContent = true;
+    detectedIndent = true;
+    emptyLines = 0;
+    captureStart = state.position;
+
+    while (!is_EOL(ch) && (ch !== 0)) {
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    captureSegment(state, captureStart, state.position, false);
+  }
+
+  return true;
+}
+
+function readBlockSequence(state, nodeIndent) {
+  var _line,
+      _tag      = state.tag,
+      _anchor   = state.anchor,
+      _result   = [],
+      following,
+      detected  = false,
+      ch;
+
+  // there is a leading tab before this token, so it can't be a block sequence/mapping;
+  // it can still be flow sequence/mapping or a scalar
+  if (state.firstTabInLine !== -1) return false;
+
+  if (state.anchor !== null) {
+    state.anchorMap[state.anchor] = _result;
+  }
+
+  ch = state.input.charCodeAt(state.position);
+
+  while (ch !== 0) {
+    if (state.firstTabInLine !== -1) {
+      state.position = state.firstTabInLine;
+      throwError(state, 'tab characters must not be used in indentation');
+    }
+
+    if (ch !== 0x2D/* - */) {
+      break;
+    }
+
+    following = state.input.charCodeAt(state.position + 1);
+
+    if (!is_WS_OR_EOL(following)) {
+      break;
+    }
+
+    detected = true;
+    state.position++;
+
+    if (skipSeparationSpace(state, true, -1)) {
+      if (state.lineIndent <= nodeIndent) {
+        _result.push(null);
+        ch = state.input.charCodeAt(state.position);
+        continue;
+      }
+    }
+
+    _line = state.line;
+    composeNode(state, nodeIndent, CONTEXT_BLOCK_IN, false, true);
+    _result.push(state.result);
+    skipSeparationSpace(state, true, -1);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if ((state.line === _line || state.lineIndent > nodeIndent) && (ch !== 0)) {
+      throwError(state, 'bad indentation of a sequence entry');
+    } else if (state.lineIndent < nodeIndent) {
+      break;
+    }
+  }
+
+  if (detected) {
+    state.tag = _tag;
+    state.anchor = _anchor;
+    state.kind = 'sequence';
+    state.result = _result;
+    return true;
+  }
+  return false;
+}
+
+function readBlockMapping(state, nodeIndent, flowIndent) {
+  var following,
+      allowCompact,
+      _line,
+      _keyLine,
+      _keyLineStart,
+      _keyPos,
+      _tag          = state.tag,
+      _anchor       = state.anchor,
+      _result       = {},
+      overridableKeys = Object.create(null),
+      keyTag        = null,
+      keyNode       = null,
+      valueNode     = null,
+      atExplicitKey = false,
+      detected      = false,
+      ch;
+
+  // there is a leading tab before this token, so it can't be a block sequence/mapping;
+  // it can still be flow sequence/mapping or a scalar
+  if (state.firstTabInLine !== -1) return false;
+
+  if (state.anchor !== null) {
+    state.anchorMap[state.anchor] = _result;
+  }
+
+  ch = state.input.charCodeAt(state.position);
+
+  while (ch !== 0) {
+    if (!atExplicitKey && state.firstTabInLine !== -1) {
+      state.position = state.firstTabInLine;
+      throwError(state, 'tab characters must not be used in indentation');
+    }
+
+    following = state.input.charCodeAt(state.position + 1);
+    _line = state.line; // Save the current line.
+
+    //
+    // Explicit notation case. There are two separate blocks:
+    // first for the key (denoted by "?") and second for the value (denoted by ":")
+    //
+    if ((ch === 0x3F/* ? */ || ch === 0x3A/* : */) && is_WS_OR_EOL(following)) {
+
+      if (ch === 0x3F/* ? */) {
+        if (atExplicitKey) {
+          storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, null, _keyLine, _keyLineStart, _keyPos);
+          keyTag = keyNode = valueNode = null;
+        }
+
+        detected = true;
+        atExplicitKey = true;
+        allowCompact = true;
+
+      } else if (atExplicitKey) {
+        // i.e. 0x3A/* : */ === character after the explicit key.
+        atExplicitKey = false;
+        allowCompact = true;
+
+      } else {
+        throwError(state, 'incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line');
+      }
+
+      state.position += 1;
+      ch = following;
+
+    //
+    // Implicit notation case. Flow-style node as the key first, then ":", and the value.
+    //
+    } else {
+      _keyLine = state.line;
+      _keyLineStart = state.lineStart;
+      _keyPos = state.position;
+
+      if (!composeNode(state, flowIndent, CONTEXT_FLOW_OUT, false, true)) {
+        // Neither implicit nor explicit notation.
+        // Reading is done. Go to the epilogue.
+        break;
+      }
+
+      if (state.line === _line) {
+        ch = state.input.charCodeAt(state.position);
+
+        while (is_WHITE_SPACE(ch)) {
+          ch = state.input.charCodeAt(++state.position);
+        }
+
+        if (ch === 0x3A/* : */) {
+          ch = state.input.charCodeAt(++state.position);
+
+          if (!is_WS_OR_EOL(ch)) {
+            throwError(state, 'a whitespace character is expected after the key-value separator within a block mapping');
+          }
+
+          if (atExplicitKey) {
+            storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, null, _keyLine, _keyLineStart, _keyPos);
+            keyTag = keyNode = valueNode = null;
+          }
+
+          detected = true;
+          atExplicitKey = false;
+          allowCompact = false;
+          keyTag = state.tag;
+          keyNode = state.result;
+
+        } else if (detected) {
+          throwError(state, 'can not read an implicit mapping pair; a colon is missed');
+
+        } else {
+          state.tag = _tag;
+          state.anchor = _anchor;
+          return true; // Keep the result of `composeNode`.
+        }
+
+      } else if (detected) {
+        throwError(state, 'can not read a block mapping entry; a multiline key may not be an implicit key');
+
+      } else {
+        state.tag = _tag;
+        state.anchor = _anchor;
+        return true; // Keep the result of `composeNode`.
+      }
+    }
+
+    //
+    // Common reading code for both explicit and implicit notations.
+    //
+    if (state.line === _line || state.lineIndent > nodeIndent) {
+      if (atExplicitKey) {
+        _keyLine = state.line;
+        _keyLineStart = state.lineStart;
+        _keyPos = state.position;
+      }
+
+      if (composeNode(state, nodeIndent, CONTEXT_BLOCK_OUT, true, allowCompact)) {
+        if (atExplicitKey) {
+          keyNode = state.result;
+        } else {
+          valueNode = state.result;
+        }
+      }
+
+      if (!atExplicitKey) {
+        storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, valueNode, _keyLine, _keyLineStart, _keyPos);
+        keyTag = keyNode = valueNode = null;
+      }
+
+      skipSeparationSpace(state, true, -1);
+      ch = state.input.charCodeAt(state.position);
+    }
+
+    if ((state.line === _line || state.lineIndent > nodeIndent) && (ch !== 0)) {
+      throwError(state, 'bad indentation of a mapping entry');
+    } else if (state.lineIndent < nodeIndent) {
+      break;
+    }
+  }
+
+  //
+  // Epilogue.
+  //
+
+  // Special case: last mapping's node contains only the key in explicit notation.
+  if (atExplicitKey) {
+    storeMappingPair(state, _result, overridableKeys, keyTag, keyNode, null, _keyLine, _keyLineStart, _keyPos);
+  }
+
+  // Expose the resulting mapping.
+  if (detected) {
+    state.tag = _tag;
+    state.anchor = _anchor;
+    state.kind = 'mapping';
+    state.result = _result;
+  }
+
+  return detected;
+}
+
+function readTagProperty(state) {
+  var _position,
+      isVerbatim = false,
+      isNamed    = false,
+      tagHandle,
+      tagName,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x21/* ! */) return false;
+
+  if (state.tag !== null) {
+    throwError(state, 'duplication of a tag property');
+  }
+
+  ch = state.input.charCodeAt(++state.position);
+
+  if (ch === 0x3C/* < */) {
+    isVerbatim = true;
+    ch = state.input.charCodeAt(++state.position);
+
+  } else if (ch === 0x21/* ! */) {
+    isNamed = true;
+    tagHandle = '!!';
+    ch = state.input.charCodeAt(++state.position);
+
+  } else {
+    tagHandle = '!';
+  }
+
+  _position = state.position;
+
+  if (isVerbatim) {
+    do { ch = state.input.charCodeAt(++state.position); }
+    while (ch !== 0 && ch !== 0x3E/* > */);
+
+    if (state.position < state.length) {
+      tagName = state.input.slice(_position, state.position);
+      ch = state.input.charCodeAt(++state.position);
+    } else {
+      throwError(state, 'unexpected end of the stream within a verbatim tag');
+    }
+  } else {
+    while (ch !== 0 && !is_WS_OR_EOL(ch)) {
+
+      if (ch === 0x21/* ! */) {
+        if (!isNamed) {
+          tagHandle = state.input.slice(_position - 1, state.position + 1);
+
+          if (!PATTERN_TAG_HANDLE.test(tagHandle)) {
+            throwError(state, 'named tag handle cannot contain such characters');
+          }
+
+          isNamed = true;
+          _position = state.position + 1;
+        } else {
+          throwError(state, 'tag suffix cannot contain exclamation marks');
+        }
+      }
+
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    tagName = state.input.slice(_position, state.position);
+
+    if (PATTERN_FLOW_INDICATORS.test(tagName)) {
+      throwError(state, 'tag suffix cannot contain flow indicator characters');
+    }
+  }
+
+  if (tagName && !PATTERN_TAG_URI.test(tagName)) {
+    throwError(state, 'tag name cannot contain such characters: ' + tagName);
+  }
+
+  try {
+    tagName = decodeURIComponent(tagName);
+  } catch (err) {
+    throwError(state, 'tag name is malformed: ' + tagName);
+  }
+
+  if (isVerbatim) {
+    state.tag = tagName;
+
+  } else if (_hasOwnProperty.call(state.tagMap, tagHandle)) {
+    state.tag = state.tagMap[tagHandle] + tagName;
+
+  } else if (tagHandle === '!') {
+    state.tag = '!' + tagName;
+
+  } else if (tagHandle === '!!') {
+    state.tag = 'tag:yaml.org,2002:' + tagName;
+
+  } else {
+    throwError(state, 'undeclared tag handle "' + tagHandle + '"');
+  }
+
+  return true;
+}
+
+function readAnchorProperty(state) {
+  var _position,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x26/* & */) return false;
+
+  if (state.anchor !== null) {
+    throwError(state, 'duplication of an anchor property');
+  }
+
+  ch = state.input.charCodeAt(++state.position);
+  _position = state.position;
+
+  while (ch !== 0 && !is_WS_OR_EOL(ch) && !is_FLOW_INDICATOR(ch)) {
+    ch = state.input.charCodeAt(++state.position);
+  }
+
+  if (state.position === _position) {
+    throwError(state, 'name of an anchor node must contain at least one character');
+  }
+
+  state.anchor = state.input.slice(_position, state.position);
+  return true;
+}
+
+function readAlias(state) {
+  var _position, alias,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x2A/* * */) return false;
+
+  ch = state.input.charCodeAt(++state.position);
+  _position = state.position;
+
+  while (ch !== 0 && !is_WS_OR_EOL(ch) && !is_FLOW_INDICATOR(ch)) {
+    ch = state.input.charCodeAt(++state.position);
+  }
+
+  if (state.position === _position) {
+    throwError(state, 'name of an alias node must contain at least one character');
+  }
+
+  alias = state.input.slice(_position, state.position);
+
+  if (!_hasOwnProperty.call(state.anchorMap, alias)) {
+    throwError(state, 'unidentified alias "' + alias + '"');
+  }
+
+  state.result = state.anchorMap[alias];
+  skipSeparationSpace(state, true, -1);
+  return true;
+}
+
+function composeNode(state, parentIndent, nodeContext, allowToSeek, allowCompact) {
+  var allowBlockStyles,
+      allowBlockScalars,
+      allowBlockCollections,
+      indentStatus = 1, // 1: this>parent, 0: this=parent, -1: this<parent
+      atNewLine  = false,
+      hasContent = false,
+      typeIndex,
+      typeQuantity,
+      typeList,
+      type,
+      flowIndent,
+      blockIndent;
+
+  if (state.listener !== null) {
+    state.listener('open', state);
+  }
+
+  state.tag    = null;
+  state.anchor = null;
+  state.kind   = null;
+  state.result = null;
+
+  allowBlockStyles = allowBlockScalars = allowBlockCollections =
+    CONTEXT_BLOCK_OUT === nodeContext ||
+    CONTEXT_BLOCK_IN  === nodeContext;
+
+  if (allowToSeek) {
+    if (skipSeparationSpace(state, true, -1)) {
+      atNewLine = true;
+
+      if (state.lineIndent > parentIndent) {
+        indentStatus = 1;
+      } else if (state.lineIndent === parentIndent) {
+        indentStatus = 0;
+      } else if (state.lineIndent < parentIndent) {
+        indentStatus = -1;
+      }
+    }
+  }
+
+  if (indentStatus === 1) {
+    while (readTagProperty(state) || readAnchorProperty(state)) {
+      if (skipSeparationSpace(state, true, -1)) {
+        atNewLine = true;
+        allowBlockCollections = allowBlockStyles;
+
+        if (state.lineIndent > parentIndent) {
+          indentStatus = 1;
+        } else if (state.lineIndent === parentIndent) {
+          indentStatus = 0;
+        } else if (state.lineIndent < parentIndent) {
+          indentStatus = -1;
+        }
+      } else {
+        allowBlockCollections = false;
+      }
+    }
+  }
+
+  if (allowBlockCollections) {
+    allowBlockCollections = atNewLine || allowCompact;
+  }
+
+  if (indentStatus === 1 || CONTEXT_BLOCK_OUT === nodeContext) {
+    if (CONTEXT_FLOW_IN === nodeContext || CONTEXT_FLOW_OUT === nodeContext) {
+      flowIndent = parentIndent;
+    } else {
+      flowIndent = parentIndent + 1;
+    }
+
+    blockIndent = state.position - state.lineStart;
+
+    if (indentStatus === 1) {
+      if (allowBlockCollections &&
+          (readBlockSequence(state, blockIndent) ||
+           readBlockMapping(state, blockIndent, flowIndent)) ||
+          readFlowCollection(state, flowIndent)) {
+        hasContent = true;
+      } else {
+        if ((allowBlockScalars && readBlockScalar(state, flowIndent)) ||
+            readSingleQuotedScalar(state, flowIndent) ||
+            readDoubleQuotedScalar(state, flowIndent)) {
+          hasContent = true;
+
+        } else if (readAlias(state)) {
+          hasContent = true;
+
+          if (state.tag !== null || state.anchor !== null) {
+            throwError(state, 'alias node should not have any properties');
+          }
+
+        } else if (readPlainScalar(state, flowIndent, CONTEXT_FLOW_IN === nodeContext)) {
+          hasContent = true;
+
+          if (state.tag === null) {
+            state.tag = '?';
+          }
+        }
+
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+      }
+    } else if (indentStatus === 0) {
+      // Special case: block sequences are allowed to have same indentation level as the parent.
+      // http://www.yaml.org/spec/1.2/spec.html#id2799784
+      hasContent = allowBlockCollections && readBlockSequence(state, blockIndent);
+    }
+  }
+
+  if (state.tag === null) {
+    if (state.anchor !== null) {
+      state.anchorMap[state.anchor] = state.result;
+    }
+
+  } else if (state.tag === '?') {
+    // Implicit resolving is not allowed for non-scalar types, and '?'
+    // non-specific tag is only automatically assigned to plain scalars.
+    //
+    // We only need to check kind conformity in case user explicitly assigns '?'
+    // tag, for example like this: "!<?> [0]"
+    //
+    if (state.result !== null && state.kind !== 'scalar') {
+      throwError(state, 'unacceptable node kind for !<?> tag; it should be "scalar", not "' + state.kind + '"');
+    }
+
+    for (typeIndex = 0, typeQuantity = state.implicitTypes.length; typeIndex < typeQuantity; typeIndex += 1) {
+      type = state.implicitTypes[typeIndex];
+
+      if (type.resolve(state.result)) { // `state.result` updated in resolver if matched
+        state.result = type.construct(state.result);
+        state.tag = type.tag;
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+        break;
+      }
+    }
+  } else if (state.tag !== '!') {
+    if (_hasOwnProperty.call(state.typeMap[state.kind || 'fallback'], state.tag)) {
+      type = state.typeMap[state.kind || 'fallback'][state.tag];
+    } else {
+      // looking for multi type
+      type = null;
+      typeList = state.typeMap.multi[state.kind || 'fallback'];
+
+      for (typeIndex = 0, typeQuantity = typeList.length; typeIndex < typeQuantity; typeIndex += 1) {
+        if (state.tag.slice(0, typeList[typeIndex].tag.length) === typeList[typeIndex].tag) {
+          type = typeList[typeIndex];
+          break;
+        }
+      }
+    }
+
+    if (!type) {
+      throwError(state, 'unknown tag !<' + state.tag + '>');
+    }
+
+    if (state.result !== null && type.kind !== state.kind) {
+      throwError(state, 'unacceptable node kind for !<' + state.tag + '> tag; it should be "' + type.kind + '", not "' + state.kind + '"');
+    }
+
+    if (!type.resolve(state.result, state.tag)) { // `state.result` updated in resolver if matched
+      throwError(state, 'cannot resolve a node with !<' + state.tag + '> explicit tag');
+    } else {
+      state.result = type.construct(state.result, state.tag);
+      if (state.anchor !== null) {
+        state.anchorMap[state.anchor] = state.result;
+      }
+    }
+  }
+
+  if (state.listener !== null) {
+    state.listener('close', state);
+  }
+  return state.tag !== null ||  state.anchor !== null || hasContent;
+}
+
+function readDocument(state) {
+  var documentStart = state.position,
+      _position,
+      directiveName,
+      directiveArgs,
+      hasDirectives = false,
+      ch;
+
+  state.version = null;
+  state.checkLineBreaks = state.legacy;
+  state.tagMap = Object.create(null);
+  state.anchorMap = Object.create(null);
+
+  while ((ch = state.input.charCodeAt(state.position)) !== 0) {
+    skipSeparationSpace(state, true, -1);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if (state.lineIndent > 0 || ch !== 0x25/* % */) {
+      break;
+    }
+
+    hasDirectives = true;
+    ch = state.input.charCodeAt(++state.position);
+    _position = state.position;
+
+    while (ch !== 0 && !is_WS_OR_EOL(ch)) {
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    directiveName = state.input.slice(_position, state.position);
+    directiveArgs = [];
+
+    if (directiveName.length < 1) {
+      throwError(state, 'directive name must not be less than one character in length');
+    }
+
+    while (ch !== 0) {
+      while (is_WHITE_SPACE(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      if (ch === 0x23/* # */) {
+        do { ch = state.input.charCodeAt(++state.position); }
+        while (ch !== 0 && !is_EOL(ch));
+        break;
+      }
+
+      if (is_EOL(ch)) break;
+
+      _position = state.position;
+
+      while (ch !== 0 && !is_WS_OR_EOL(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      directiveArgs.push(state.input.slice(_position, state.position));
+    }
+
+    if (ch !== 0) readLineBreak(state);
+
+    if (_hasOwnProperty.call(directiveHandlers, directiveName)) {
+      directiveHandlers[directiveName](state, directiveName, directiveArgs);
+    } else {
+      throwWarning(state, 'unknown document directive "' + directiveName + '"');
+    }
+  }
+
+  skipSeparationSpace(state, true, -1);
+
+  if (state.lineIndent === 0 &&
+      state.input.charCodeAt(state.position)     === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 1) === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 2) === 0x2D/* - */) {
+    state.position += 3;
+    skipSeparationSpace(state, true, -1);
+
+  } else if (hasDirectives) {
+    throwError(state, 'directives end mark is expected');
+  }
+
+  composeNode(state, state.lineIndent - 1, CONTEXT_BLOCK_OUT, false, true);
+  skipSeparationSpace(state, true, -1);
+
+  if (state.checkLineBreaks &&
+      PATTERN_NON_ASCII_LINE_BREAKS.test(state.input.slice(documentStart, state.position))) {
+    throwWarning(state, 'non-ASCII line breaks are interpreted as content');
+  }
+
+  state.documents.push(state.result);
+
+  if (state.position === state.lineStart && testDocumentSeparator(state)) {
+
+    if (state.input.charCodeAt(state.position) === 0x2E/* . */) {
+      state.position += 3;
+      skipSeparationSpace(state, true, -1);
+    }
+    return;
+  }
+
+  if (state.position < (state.length - 1)) {
+    throwError(state, 'end of the stream or a document separator is expected');
+  } else {
+    return;
+  }
+}
+
+
+function loadDocuments(input, options) {
+  input = String(input);
+  options = options || {};
+
+  if (input.length !== 0) {
+
+    // Add tailing `\n` if not exists
+    if (input.charCodeAt(input.length - 1) !== 0x0A/* LF */ &&
+        input.charCodeAt(input.length - 1) !== 0x0D/* CR */) {
+      input += '\n';
+    }
+
+    // Strip BOM
+    if (input.charCodeAt(0) === 0xFEFF) {
+      input = input.slice(1);
+    }
+  }
+
+  var state = new State(input, options);
+
+  var nullpos = input.indexOf('\0');
+
+  if (nullpos !== -1) {
+    state.position = nullpos;
+    throwError(state, 'null byte is not allowed in input');
+  }
+
+  // Use 0 as string terminator. That significantly simplifies bounds check.
+  state.input += '\0';
+
+  while (state.input.charCodeAt(state.position) === 0x20/* Space */) {
+    state.lineIndent += 1;
+    state.position += 1;
+  }
+
+  while (state.position < (state.length - 1)) {
+    readDocument(state);
+  }
+
+  return state.documents;
+}
+
+
+function loadAll(input, iterator, options) {
+  if (iterator !== null && typeof iterator === 'object' && typeof options === 'undefined') {
+    options = iterator;
+    iterator = null;
+  }
+
+  var documents = loadDocuments(input, options);
+
+  if (typeof iterator !== 'function') {
+    return documents;
+  }
+
+  for (var index = 0, length = documents.length; index < length; index += 1) {
+    iterator(documents[index]);
+  }
+}
+
+
+function load(input, options) {
+  var documents = loadDocuments(input, options);
+
+  if (documents.length === 0) {
+    /*eslint-disable no-undefined*/
+    return undefined;
+  } else if (documents.length === 1) {
+    return documents[0];
+  }
+  throw new YAMLException('expected a single document in the stream, but found more');
+}
+
+
+module.exports.loadAll = loadAll;
+module.exports.load    = load;
+
+
+/***/ }),
+/* 8 */
+/***/ ((module) => {
+
+
+
+
+function isNothing(subject) {
+  return (typeof subject === 'undefined') || (subject === null);
+}
+
+
+function isObject(subject) {
+  return (typeof subject === 'object') && (subject !== null);
+}
+
+
+function toArray(sequence) {
+  if (Array.isArray(sequence)) return sequence;
+  else if (isNothing(sequence)) return [];
+
+  return [ sequence ];
+}
+
+
+function extend(target, source) {
+  var index, length, key, sourceKeys;
+
+  if (source) {
+    sourceKeys = Object.keys(source);
+
+    for (index = 0, length = sourceKeys.length; index < length; index += 1) {
+      key = sourceKeys[index];
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+
+function repeat(string, count) {
+  var result = '', cycle;
+
+  for (cycle = 0; cycle < count; cycle += 1) {
+    result += string;
+  }
+
+  return result;
+}
+
+
+function isNegativeZero(number) {
+  return (number === 0) && (Number.NEGATIVE_INFINITY === 1 / number);
+}
+
+
+module.exports.isNothing      = isNothing;
+module.exports.isObject       = isObject;
+module.exports.toArray        = toArray;
+module.exports.repeat         = repeat;
+module.exports.isNegativeZero = isNegativeZero;
+module.exports.extend         = extend;
+
+
+/***/ }),
+/* 9 */
+/***/ ((module) => {
+
+// YAML error class. http://stackoverflow.com/questions/8458984
+//
+
+
+
+function formatError(exception, compact) {
+  var where = '', message = exception.reason || '(unknown reason)';
+
+  if (!exception.mark) return message;
+
+  if (exception.mark.name) {
+    where += 'in "' + exception.mark.name + '" ';
+  }
+
+  where += '(' + (exception.mark.line + 1) + ':' + (exception.mark.column + 1) + ')';
+
+  if (!compact && exception.mark.snippet) {
+    where += '\n\n' + exception.mark.snippet;
+  }
+
+  return message + ' ' + where;
+}
+
+
+function YAMLException(reason, mark) {
+  // Super constructor
+  Error.call(this);
+
+  this.name = 'YAMLException';
+  this.reason = reason;
+  this.mark = mark;
+  this.message = formatError(this, false);
+
+  // Include stack trace in error object
+  if (Error.captureStackTrace) {
+    // Chrome and NodeJS
+    Error.captureStackTrace(this, this.constructor);
+  } else {
+    // FF, IE 10+ and Safari 6+. Fallback for others
+    this.stack = (new Error()).stack || '';
+  }
+}
+
+
+// Inherit from Error
+YAMLException.prototype = Object.create(Error.prototype);
+YAMLException.prototype.constructor = YAMLException;
+
+
+YAMLException.prototype.toString = function toString(compact) {
+  return this.name + ': ' + formatError(this, compact);
+};
+
+
+module.exports = YAMLException;
+
+
+/***/ }),
+/* 10 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+
+var common = __webpack_require__(8);
+
+
+// get snippet for a single line, respecting maxLength
+function getLine(buffer, lineStart, lineEnd, position, maxLineLength) {
+  var head = '';
+  var tail = '';
+  var maxHalfLength = Math.floor(maxLineLength / 2) - 1;
+
+  if (position - lineStart > maxHalfLength) {
+    head = ' ... ';
+    lineStart = position - maxHalfLength + head.length;
+  }
+
+  if (lineEnd - position > maxHalfLength) {
+    tail = ' ...';
+    lineEnd = position + maxHalfLength - tail.length;
+  }
+
+  return {
+    str: head + buffer.slice(lineStart, lineEnd).replace(/\t/g, '→') + tail,
+    pos: position - lineStart + head.length // relative position
+  };
+}
+
+
+function padStart(string, max) {
+  return common.repeat(' ', max - string.length) + string;
+}
+
+
+function makeSnippet(mark, options) {
+  options = Object.create(options || null);
+
+  if (!mark.buffer) return null;
+
+  if (!options.maxLength) options.maxLength = 79;
+  if (typeof options.indent      !== 'number') options.indent      = 1;
+  if (typeof options.linesBefore !== 'number') options.linesBefore = 3;
+  if (typeof options.linesAfter  !== 'number') options.linesAfter  = 2;
+
+  var re = /\r?\n|\r|\0/g;
+  var lineStarts = [ 0 ];
+  var lineEnds = [];
+  var match;
+  var foundLineNo = -1;
+
+  while ((match = re.exec(mark.buffer))) {
+    lineEnds.push(match.index);
+    lineStarts.push(match.index + match[0].length);
+
+    if (mark.position <= match.index && foundLineNo < 0) {
+      foundLineNo = lineStarts.length - 2;
+    }
+  }
+
+  if (foundLineNo < 0) foundLineNo = lineStarts.length - 1;
+
+  var result = '', i, line;
+  var lineNoLength = Math.min(mark.line + options.linesAfter, lineEnds.length).toString().length;
+  var maxLineLength = options.maxLength - (options.indent + lineNoLength + 3);
+
+  for (i = 1; i <= options.linesBefore; i++) {
+    if (foundLineNo - i < 0) break;
+    line = getLine(
+      mark.buffer,
+      lineStarts[foundLineNo - i],
+      lineEnds[foundLineNo - i],
+      mark.position - (lineStarts[foundLineNo] - lineStarts[foundLineNo - i]),
+      maxLineLength
+    );
+    result = common.repeat(' ', options.indent) + padStart((mark.line - i + 1).toString(), lineNoLength) +
+      ' | ' + line.str + '\n' + result;
+  }
+
+  line = getLine(mark.buffer, lineStarts[foundLineNo], lineEnds[foundLineNo], mark.position, maxLineLength);
+  result += common.repeat(' ', options.indent) + padStart((mark.line + 1).toString(), lineNoLength) +
+    ' | ' + line.str + '\n';
+  result += common.repeat('-', options.indent + lineNoLength + 3 + line.pos) + '^' + '\n';
+
+  for (i = 1; i <= options.linesAfter; i++) {
+    if (foundLineNo + i >= lineEnds.length) break;
+    line = getLine(
+      mark.buffer,
+      lineStarts[foundLineNo + i],
+      lineEnds[foundLineNo + i],
+      mark.position - (lineStarts[foundLineNo] - lineStarts[foundLineNo + i]),
+      maxLineLength
+    );
+    result += common.repeat(' ', options.indent) + padStart((mark.line + i + 1).toString(), lineNoLength) +
+      ' | ' + line.str + '\n';
+  }
+
+  return result.replace(/\n$/, '');
+}
+
+
+module.exports = makeSnippet;
+
+
+/***/ }),
+/* 11 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// JS-YAML's default schema for `safeLoad` function.
+// It is not described in the YAML specification.
+//
+// This schema is based on standard YAML's Core schema and includes most of
+// extra types described at YAML tag repository. (http://yaml.org/type/)
+
+
+
+
+
+module.exports = (__webpack_require__(12).extend)({
+  implicit: [
+    __webpack_require__(24),
+    __webpack_require__(25)
+  ],
+  explicit: [
+    __webpack_require__(26),
+    __webpack_require__(27),
+    __webpack_require__(28),
+    __webpack_require__(29)
+  ]
+});
+
+
+/***/ }),
+/* 12 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// Standard YAML's Core schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2804923
+//
+// NOTE: JS-YAML does not support schema-specific tag resolution restrictions.
+// So, Core schema has no distinctions from JSON schema is JS-YAML.
+
+
+
+
+
+module.exports = __webpack_require__(13);
+
+
+/***/ }),
+/* 13 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// Standard YAML's JSON schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2803231
+//
+// NOTE: JS-YAML does not support schema-specific tag resolution restrictions.
+// So, this schema is not such strict as defined in the YAML specification.
+// It allows numbers in binary notaion, use `Null` and `NULL` as `null`, etc.
+
+
+
+
+
+module.exports = (__webpack_require__(14).extend)({
+  implicit: [
+    __webpack_require__(20),
+    __webpack_require__(21),
+    __webpack_require__(22),
+    __webpack_require__(23)
+  ]
+});
+
+
+/***/ }),
+/* 14 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// Standard YAML's Failsafe schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2802346
+
+
+
+
+
+var Schema = __webpack_require__(15);
+
+
+module.exports = new Schema({
+  explicit: [
+    __webpack_require__(17),
+    __webpack_require__(18),
+    __webpack_require__(19)
+  ]
+});
+
+
+/***/ }),
+/* 15 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+/*eslint-disable max-len*/
+
+var YAMLException = __webpack_require__(9);
+var Type          = __webpack_require__(16);
+
+
+function compileList(schema, name) {
+  var result = [];
+
+  schema[name].forEach(function (currentType) {
+    var newIndex = result.length;
+
+    result.forEach(function (previousType, previousIndex) {
+      if (previousType.tag === currentType.tag &&
+          previousType.kind === currentType.kind &&
+          previousType.multi === currentType.multi) {
+
+        newIndex = previousIndex;
+      }
+    });
+
+    result[newIndex] = currentType;
+  });
+
+  return result;
+}
+
+
+function compileMap(/* lists... */) {
+  var result = {
+        scalar: {},
+        sequence: {},
+        mapping: {},
+        fallback: {},
+        multi: {
+          scalar: [],
+          sequence: [],
+          mapping: [],
+          fallback: []
+        }
+      }, index, length;
+
+  function collectType(type) {
+    if (type.multi) {
+      result.multi[type.kind].push(type);
+      result.multi['fallback'].push(type);
+    } else {
+      result[type.kind][type.tag] = result['fallback'][type.tag] = type;
+    }
+  }
+
+  for (index = 0, length = arguments.length; index < length; index += 1) {
+    arguments[index].forEach(collectType);
+  }
+  return result;
+}
+
+
+function Schema(definition) {
+  return this.extend(definition);
+}
+
+
+Schema.prototype.extend = function extend(definition) {
+  var implicit = [];
+  var explicit = [];
+
+  if (definition instanceof Type) {
+    // Schema.extend(type)
+    explicit.push(definition);
+
+  } else if (Array.isArray(definition)) {
+    // Schema.extend([ type1, type2, ... ])
+    explicit = explicit.concat(definition);
+
+  } else if (definition && (Array.isArray(definition.implicit) || Array.isArray(definition.explicit))) {
+    // Schema.extend({ explicit: [ type1, type2, ... ], implicit: [ type1, type2, ... ] })
+    if (definition.implicit) implicit = implicit.concat(definition.implicit);
+    if (definition.explicit) explicit = explicit.concat(definition.explicit);
+
+  } else {
+    throw new YAMLException('Schema.extend argument should be a Type, [ Type ], ' +
+      'or a schema definition ({ implicit: [...], explicit: [...] })');
+  }
+
+  implicit.forEach(function (type) {
+    if (!(type instanceof Type)) {
+      throw new YAMLException('Specified list of YAML types (or a single Type object) contains a non-Type object.');
+    }
+
+    if (type.loadKind && type.loadKind !== 'scalar') {
+      throw new YAMLException('There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.');
+    }
+
+    if (type.multi) {
+      throw new YAMLException('There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.');
+    }
+  });
+
+  explicit.forEach(function (type) {
+    if (!(type instanceof Type)) {
+      throw new YAMLException('Specified list of YAML types (or a single Type object) contains a non-Type object.');
+    }
+  });
+
+  var result = Object.create(Schema.prototype);
+
+  result.implicit = (this.implicit || []).concat(implicit);
+  result.explicit = (this.explicit || []).concat(explicit);
+
+  result.compiledImplicit = compileList(result, 'implicit');
+  result.compiledExplicit = compileList(result, 'explicit');
+  result.compiledTypeMap  = compileMap(result.compiledImplicit, result.compiledExplicit);
+
+  return result;
+};
+
+
+module.exports = Schema;
+
+
+/***/ }),
+/* 16 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var YAMLException = __webpack_require__(9);
+
+var TYPE_CONSTRUCTOR_OPTIONS = [
+  'kind',
+  'multi',
+  'resolve',
+  'construct',
+  'instanceOf',
+  'predicate',
+  'represent',
+  'representName',
+  'defaultStyle',
+  'styleAliases'
+];
+
+var YAML_NODE_KINDS = [
+  'scalar',
+  'sequence',
+  'mapping'
+];
+
+function compileStyleAliases(map) {
+  var result = {};
+
+  if (map !== null) {
+    Object.keys(map).forEach(function (style) {
+      map[style].forEach(function (alias) {
+        result[String(alias)] = style;
+      });
+    });
+  }
+
+  return result;
+}
+
+function Type(tag, options) {
+  options = options || {};
+
+  Object.keys(options).forEach(function (name) {
+    if (TYPE_CONSTRUCTOR_OPTIONS.indexOf(name) === -1) {
+      throw new YAMLException('Unknown option "' + name + '" is met in definition of "' + tag + '" YAML type.');
+    }
+  });
+
+  // TODO: Add tag format check.
+  this.options       = options; // keep original options in case user wants to extend this type later
+  this.tag           = tag;
+  this.kind          = options['kind']          || null;
+  this.resolve       = options['resolve']       || function () { return true; };
+  this.construct     = options['construct']     || function (data) { return data; };
+  this.instanceOf    = options['instanceOf']    || null;
+  this.predicate     = options['predicate']     || null;
+  this.represent     = options['represent']     || null;
+  this.representName = options['representName'] || null;
+  this.defaultStyle  = options['defaultStyle']  || null;
+  this.multi         = options['multi']         || false;
+  this.styleAliases  = compileStyleAliases(options['styleAliases'] || null);
+
+  if (YAML_NODE_KINDS.indexOf(this.kind) === -1) {
+    throw new YAMLException('Unknown kind "' + this.kind + '" is specified for "' + tag + '" YAML type.');
+  }
+}
+
+module.exports = Type;
+
+
+/***/ }),
+/* 17 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+module.exports = new Type('tag:yaml.org,2002:str', {
+  kind: 'scalar',
+  construct: function (data) { return data !== null ? data : ''; }
+});
+
+
+/***/ }),
+/* 18 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+module.exports = new Type('tag:yaml.org,2002:seq', {
+  kind: 'sequence',
+  construct: function (data) { return data !== null ? data : []; }
+});
+
+
+/***/ }),
+/* 19 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+module.exports = new Type('tag:yaml.org,2002:map', {
+  kind: 'mapping',
+  construct: function (data) { return data !== null ? data : {}; }
+});
+
+
+/***/ }),
+/* 20 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+function resolveYamlNull(data) {
+  if (data === null) return true;
+
+  var max = data.length;
+
+  return (max === 1 && data === '~') ||
+         (max === 4 && (data === 'null' || data === 'Null' || data === 'NULL'));
+}
+
+function constructYamlNull() {
+  return null;
+}
+
+function isNull(object) {
+  return object === null;
+}
+
+module.exports = new Type('tag:yaml.org,2002:null', {
+  kind: 'scalar',
+  resolve: resolveYamlNull,
+  construct: constructYamlNull,
+  predicate: isNull,
+  represent: {
+    canonical: function () { return '~';    },
+    lowercase: function () { return 'null'; },
+    uppercase: function () { return 'NULL'; },
+    camelcase: function () { return 'Null'; },
+    empty:     function () { return '';     }
+  },
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+/* 21 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+function resolveYamlBoolean(data) {
+  if (data === null) return false;
+
+  var max = data.length;
+
+  return (max === 4 && (data === 'true' || data === 'True' || data === 'TRUE')) ||
+         (max === 5 && (data === 'false' || data === 'False' || data === 'FALSE'));
+}
+
+function constructYamlBoolean(data) {
+  return data === 'true' ||
+         data === 'True' ||
+         data === 'TRUE';
+}
+
+function isBoolean(object) {
+  return Object.prototype.toString.call(object) === '[object Boolean]';
+}
+
+module.exports = new Type('tag:yaml.org,2002:bool', {
+  kind: 'scalar',
+  resolve: resolveYamlBoolean,
+  construct: constructYamlBoolean,
+  predicate: isBoolean,
+  represent: {
+    lowercase: function (object) { return object ? 'true' : 'false'; },
+    uppercase: function (object) { return object ? 'TRUE' : 'FALSE'; },
+    camelcase: function (object) { return object ? 'True' : 'False'; }
+  },
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+/* 22 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var common = __webpack_require__(8);
+var Type   = __webpack_require__(16);
+
+function isHexCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */)) ||
+         ((0x41/* A */ <= c) && (c <= 0x46/* F */)) ||
+         ((0x61/* a */ <= c) && (c <= 0x66/* f */));
+}
+
+function isOctCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x37/* 7 */));
+}
+
+function isDecCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */));
+}
+
+function resolveYamlInteger(data) {
+  if (data === null) return false;
+
+  var max = data.length,
+      index = 0,
+      hasDigits = false,
+      ch;
+
+  if (!max) return false;
+
+  ch = data[index];
+
+  // sign
+  if (ch === '-' || ch === '+') {
+    ch = data[++index];
+  }
+
+  if (ch === '0') {
+    // 0
+    if (index + 1 === max) return true;
+    ch = data[++index];
+
+    // base 2, base 8, base 16
+
+    if (ch === 'b') {
+      // base 2
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (ch !== '0' && ch !== '1') return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+
+
+    if (ch === 'x') {
+      // base 16
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (!isHexCode(data.charCodeAt(index))) return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+
+
+    if (ch === 'o') {
+      // base 8
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (!isOctCode(data.charCodeAt(index))) return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+  }
+
+  // base 10 (except 0)
+
+  // value should not start with `_`;
+  if (ch === '_') return false;
+
+  for (; index < max; index++) {
+    ch = data[index];
+    if (ch === '_') continue;
+    if (!isDecCode(data.charCodeAt(index))) {
+      return false;
+    }
+    hasDigits = true;
+  }
+
+  // Should have digits and should not end with `_`
+  if (!hasDigits || ch === '_') return false;
+
+  return true;
+}
+
+function constructYamlInteger(data) {
+  var value = data, sign = 1, ch;
+
+  if (value.indexOf('_') !== -1) {
+    value = value.replace(/_/g, '');
+  }
+
+  ch = value[0];
+
+  if (ch === '-' || ch === '+') {
+    if (ch === '-') sign = -1;
+    value = value.slice(1);
+    ch = value[0];
+  }
+
+  if (value === '0') return 0;
+
+  if (ch === '0') {
+    if (value[1] === 'b') return sign * parseInt(value.slice(2), 2);
+    if (value[1] === 'x') return sign * parseInt(value.slice(2), 16);
+    if (value[1] === 'o') return sign * parseInt(value.slice(2), 8);
+  }
+
+  return sign * parseInt(value, 10);
+}
+
+function isInteger(object) {
+  return (Object.prototype.toString.call(object)) === '[object Number]' &&
+         (object % 1 === 0 && !common.isNegativeZero(object));
+}
+
+module.exports = new Type('tag:yaml.org,2002:int', {
+  kind: 'scalar',
+  resolve: resolveYamlInteger,
+  construct: constructYamlInteger,
+  predicate: isInteger,
+  represent: {
+    binary:      function (obj) { return obj >= 0 ? '0b' + obj.toString(2) : '-0b' + obj.toString(2).slice(1); },
+    octal:       function (obj) { return obj >= 0 ? '0o'  + obj.toString(8) : '-0o'  + obj.toString(8).slice(1); },
+    decimal:     function (obj) { return obj.toString(10); },
+    /* eslint-disable max-len */
+    hexadecimal: function (obj) { return obj >= 0 ? '0x' + obj.toString(16).toUpperCase() :  '-0x' + obj.toString(16).toUpperCase().slice(1); }
+  },
+  defaultStyle: 'decimal',
+  styleAliases: {
+    binary:      [ 2,  'bin' ],
+    octal:       [ 8,  'oct' ],
+    decimal:     [ 10, 'dec' ],
+    hexadecimal: [ 16, 'hex' ]
+  }
+});
+
+
+/***/ }),
+/* 23 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var common = __webpack_require__(8);
+var Type   = __webpack_require__(16);
+
+var YAML_FLOAT_PATTERN = new RegExp(
+  // 2.5e4, 2.5 and integers
+  '^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?' +
+  // .2e4, .2
+  // special case, seems not from spec
+  '|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?' +
+  // .inf
+  '|[-+]?\\.(?:inf|Inf|INF)' +
+  // .nan
+  '|\\.(?:nan|NaN|NAN))$');
+
+function resolveYamlFloat(data) {
+  if (data === null) return false;
+
+  if (!YAML_FLOAT_PATTERN.test(data) ||
+      // Quick hack to not allow integers end with `_`
+      // Probably should update regexp & check speed
+      data[data.length - 1] === '_') {
+    return false;
+  }
+
+  return true;
+}
+
+function constructYamlFloat(data) {
+  var value, sign;
+
+  value  = data.replace(/_/g, '').toLowerCase();
+  sign   = value[0] === '-' ? -1 : 1;
+
+  if ('+-'.indexOf(value[0]) >= 0) {
+    value = value.slice(1);
+  }
+
+  if (value === '.inf') {
+    return (sign === 1) ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+
+  } else if (value === '.nan') {
+    return NaN;
+  }
+  return sign * parseFloat(value, 10);
+}
+
+
+var SCIENTIFIC_WITHOUT_DOT = /^[-+]?[0-9]+e/;
+
+function representYamlFloat(object, style) {
+  var res;
+
+  if (isNaN(object)) {
+    switch (style) {
+      case 'lowercase': return '.nan';
+      case 'uppercase': return '.NAN';
+      case 'camelcase': return '.NaN';
+    }
+  } else if (Number.POSITIVE_INFINITY === object) {
+    switch (style) {
+      case 'lowercase': return '.inf';
+      case 'uppercase': return '.INF';
+      case 'camelcase': return '.Inf';
+    }
+  } else if (Number.NEGATIVE_INFINITY === object) {
+    switch (style) {
+      case 'lowercase': return '-.inf';
+      case 'uppercase': return '-.INF';
+      case 'camelcase': return '-.Inf';
+    }
+  } else if (common.isNegativeZero(object)) {
+    return '-0.0';
+  }
+
+  res = object.toString(10);
+
+  // JS stringifier can build scientific format without dots: 5e-100,
+  // while YAML requres dot: 5.e-100. Fix it with simple hack
+
+  return SCIENTIFIC_WITHOUT_DOT.test(res) ? res.replace('e', '.e') : res;
+}
+
+function isFloat(object) {
+  return (Object.prototype.toString.call(object) === '[object Number]') &&
+         (object % 1 !== 0 || common.isNegativeZero(object));
+}
+
+module.exports = new Type('tag:yaml.org,2002:float', {
+  kind: 'scalar',
+  resolve: resolveYamlFloat,
+  construct: constructYamlFloat,
+  predicate: isFloat,
+  represent: representYamlFloat,
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+/* 24 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+var YAML_DATE_REGEXP = new RegExp(
+  '^([0-9][0-9][0-9][0-9])'          + // [1] year
+  '-([0-9][0-9])'                    + // [2] month
+  '-([0-9][0-9])$');                   // [3] day
+
+var YAML_TIMESTAMP_REGEXP = new RegExp(
+  '^([0-9][0-9][0-9][0-9])'          + // [1] year
+  '-([0-9][0-9]?)'                   + // [2] month
+  '-([0-9][0-9]?)'                   + // [3] day
+  '(?:[Tt]|[ \\t]+)'                 + // ...
+  '([0-9][0-9]?)'                    + // [4] hour
+  ':([0-9][0-9])'                    + // [5] minute
+  ':([0-9][0-9])'                    + // [6] second
+  '(?:\\.([0-9]*))?'                 + // [7] fraction
+  '(?:[ \\t]*(Z|([-+])([0-9][0-9]?)' + // [8] tz [9] tz_sign [10] tz_hour
+  '(?::([0-9][0-9]))?))?$');           // [11] tz_minute
+
+function resolveYamlTimestamp(data) {
+  if (data === null) return false;
+  if (YAML_DATE_REGEXP.exec(data) !== null) return true;
+  if (YAML_TIMESTAMP_REGEXP.exec(data) !== null) return true;
+  return false;
+}
+
+function constructYamlTimestamp(data) {
+  var match, year, month, day, hour, minute, second, fraction = 0,
+      delta = null, tz_hour, tz_minute, date;
+
+  match = YAML_DATE_REGEXP.exec(data);
+  if (match === null) match = YAML_TIMESTAMP_REGEXP.exec(data);
+
+  if (match === null) throw new Error('Date resolve error');
+
+  // match: [1] year [2] month [3] day
+
+  year = +(match[1]);
+  month = +(match[2]) - 1; // JS month starts with 0
+  day = +(match[3]);
+
+  if (!match[4]) { // no hour
+    return new Date(Date.UTC(year, month, day));
+  }
+
+  // match: [4] hour [5] minute [6] second [7] fraction
+
+  hour = +(match[4]);
+  minute = +(match[5]);
+  second = +(match[6]);
+
+  if (match[7]) {
+    fraction = match[7].slice(0, 3);
+    while (fraction.length < 3) { // milli-seconds
+      fraction += '0';
+    }
+    fraction = +fraction;
+  }
+
+  // match: [8] tz [9] tz_sign [10] tz_hour [11] tz_minute
+
+  if (match[9]) {
+    tz_hour = +(match[10]);
+    tz_minute = +(match[11] || 0);
+    delta = (tz_hour * 60 + tz_minute) * 60000; // delta in mili-seconds
+    if (match[9] === '-') delta = -delta;
+  }
+
+  date = new Date(Date.UTC(year, month, day, hour, minute, second, fraction));
+
+  if (delta) date.setTime(date.getTime() - delta);
+
+  return date;
+}
+
+function representYamlTimestamp(object /*, style*/) {
+  return object.toISOString();
+}
+
+module.exports = new Type('tag:yaml.org,2002:timestamp', {
+  kind: 'scalar',
+  resolve: resolveYamlTimestamp,
+  construct: constructYamlTimestamp,
+  instanceOf: Date,
+  represent: representYamlTimestamp
+});
+
+
+/***/ }),
+/* 25 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+function resolveYamlMerge(data) {
+  return data === '<<' || data === null;
+}
+
+module.exports = new Type('tag:yaml.org,2002:merge', {
+  kind: 'scalar',
+  resolve: resolveYamlMerge
+});
+
+
+/***/ }),
+/* 26 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+/*eslint-disable no-bitwise*/
+
+
+var Type = __webpack_require__(16);
+
+
+// [ 64, 65, 66 ] -> [ padding, CR, LF ]
+var BASE64_MAP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r';
+
+
+function resolveYamlBinary(data) {
+  if (data === null) return false;
+
+  var code, idx, bitlen = 0, max = data.length, map = BASE64_MAP;
+
+  // Convert one by one.
+  for (idx = 0; idx < max; idx++) {
+    code = map.indexOf(data.charAt(idx));
+
+    // Skip CR/LF
+    if (code > 64) continue;
+
+    // Fail on illegal characters
+    if (code < 0) return false;
+
+    bitlen += 6;
+  }
+
+  // If there are any bits left, source was corrupted
+  return (bitlen % 8) === 0;
+}
+
+function constructYamlBinary(data) {
+  var idx, tailbits,
+      input = data.replace(/[\r\n=]/g, ''), // remove CR/LF & padding to simplify scan
+      max = input.length,
+      map = BASE64_MAP,
+      bits = 0,
+      result = [];
+
+  // Collect by 6*4 bits (3 bytes)
+
+  for (idx = 0; idx < max; idx++) {
+    if ((idx % 4 === 0) && idx) {
+      result.push((bits >> 16) & 0xFF);
+      result.push((bits >> 8) & 0xFF);
+      result.push(bits & 0xFF);
+    }
+
+    bits = (bits << 6) | map.indexOf(input.charAt(idx));
+  }
+
+  // Dump tail
+
+  tailbits = (max % 4) * 6;
+
+  if (tailbits === 0) {
+    result.push((bits >> 16) & 0xFF);
+    result.push((bits >> 8) & 0xFF);
+    result.push(bits & 0xFF);
+  } else if (tailbits === 18) {
+    result.push((bits >> 10) & 0xFF);
+    result.push((bits >> 2) & 0xFF);
+  } else if (tailbits === 12) {
+    result.push((bits >> 4) & 0xFF);
+  }
+
+  return new Uint8Array(result);
+}
+
+function representYamlBinary(object /*, style*/) {
+  var result = '', bits = 0, idx, tail,
+      max = object.length,
+      map = BASE64_MAP;
+
+  // Convert every three bytes to 4 ASCII characters.
+
+  for (idx = 0; idx < max; idx++) {
+    if ((idx % 3 === 0) && idx) {
+      result += map[(bits >> 18) & 0x3F];
+      result += map[(bits >> 12) & 0x3F];
+      result += map[(bits >> 6) & 0x3F];
+      result += map[bits & 0x3F];
+    }
+
+    bits = (bits << 8) + object[idx];
+  }
+
+  // Dump tail
+
+  tail = max % 3;
+
+  if (tail === 0) {
+    result += map[(bits >> 18) & 0x3F];
+    result += map[(bits >> 12) & 0x3F];
+    result += map[(bits >> 6) & 0x3F];
+    result += map[bits & 0x3F];
+  } else if (tail === 2) {
+    result += map[(bits >> 10) & 0x3F];
+    result += map[(bits >> 4) & 0x3F];
+    result += map[(bits << 2) & 0x3F];
+    result += map[64];
+  } else if (tail === 1) {
+    result += map[(bits >> 2) & 0x3F];
+    result += map[(bits << 4) & 0x3F];
+    result += map[64];
+    result += map[64];
+  }
+
+  return result;
+}
+
+function isBinary(obj) {
+  return Object.prototype.toString.call(obj) ===  '[object Uint8Array]';
+}
+
+module.exports = new Type('tag:yaml.org,2002:binary', {
+  kind: 'scalar',
+  resolve: resolveYamlBinary,
+  construct: constructYamlBinary,
+  predicate: isBinary,
+  represent: representYamlBinary
+});
+
+
+/***/ }),
+/* 27 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+var _toString       = Object.prototype.toString;
+
+function resolveYamlOmap(data) {
+  if (data === null) return true;
+
+  var objectKeys = [], index, length, pair, pairKey, pairHasKey,
+      object = data;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+    pairHasKey = false;
+
+    if (_toString.call(pair) !== '[object Object]') return false;
+
+    for (pairKey in pair) {
+      if (_hasOwnProperty.call(pair, pairKey)) {
+        if (!pairHasKey) pairHasKey = true;
+        else return false;
+      }
+    }
+
+    if (!pairHasKey) return false;
+
+    if (objectKeys.indexOf(pairKey) === -1) objectKeys.push(pairKey);
+    else return false;
+  }
+
+  return true;
+}
+
+function constructYamlOmap(data) {
+  return data !== null ? data : [];
+}
+
+module.exports = new Type('tag:yaml.org,2002:omap', {
+  kind: 'sequence',
+  resolve: resolveYamlOmap,
+  construct: constructYamlOmap
+});
+
+
+/***/ }),
+/* 28 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+var _toString = Object.prototype.toString;
+
+function resolveYamlPairs(data) {
+  if (data === null) return true;
+
+  var index, length, pair, keys, result,
+      object = data;
+
+  result = new Array(object.length);
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+
+    if (_toString.call(pair) !== '[object Object]') return false;
+
+    keys = Object.keys(pair);
+
+    if (keys.length !== 1) return false;
+
+    result[index] = [ keys[0], pair[keys[0]] ];
+  }
+
+  return true;
+}
+
+function constructYamlPairs(data) {
+  if (data === null) return [];
+
+  var index, length, pair, keys, result,
+      object = data;
+
+  result = new Array(object.length);
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+
+    keys = Object.keys(pair);
+
+    result[index] = [ keys[0], pair[keys[0]] ];
+  }
+
+  return result;
+}
+
+module.exports = new Type('tag:yaml.org,2002:pairs', {
+  kind: 'sequence',
+  resolve: resolveYamlPairs,
+  construct: constructYamlPairs
+});
+
+
+/***/ }),
+/* 29 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+var Type = __webpack_require__(16);
+
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+
+function resolveYamlSet(data) {
+  if (data === null) return true;
+
+  var key, object = data;
+
+  for (key in object) {
+    if (_hasOwnProperty.call(object, key)) {
+      if (object[key] !== null) return false;
+    }
+  }
+
+  return true;
+}
+
+function constructYamlSet(data) {
+  return data !== null ? data : {};
+}
+
+module.exports = new Type('tag:yaml.org,2002:set', {
+  kind: 'mapping',
+  resolve: resolveYamlSet,
+  construct: constructYamlSet
+});
+
+
+/***/ }),
+/* 30 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+
+
+/*eslint-disable no-use-before-define*/
+
+var common              = __webpack_require__(8);
+var YAMLException       = __webpack_require__(9);
+var DEFAULT_SCHEMA      = __webpack_require__(11);
+
+var _toString       = Object.prototype.toString;
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+
+var CHAR_BOM                  = 0xFEFF;
+var CHAR_TAB                  = 0x09; /* Tab */
+var CHAR_LINE_FEED            = 0x0A; /* LF */
+var CHAR_CARRIAGE_RETURN      = 0x0D; /* CR */
+var CHAR_SPACE                = 0x20; /* Space */
+var CHAR_EXCLAMATION          = 0x21; /* ! */
+var CHAR_DOUBLE_QUOTE         = 0x22; /* " */
+var CHAR_SHARP                = 0x23; /* # */
+var CHAR_PERCENT              = 0x25; /* % */
+var CHAR_AMPERSAND            = 0x26; /* & */
+var CHAR_SINGLE_QUOTE         = 0x27; /* ' */
+var CHAR_ASTERISK             = 0x2A; /* * */
+var CHAR_COMMA                = 0x2C; /* , */
+var CHAR_MINUS                = 0x2D; /* - */
+var CHAR_COLON                = 0x3A; /* : */
+var CHAR_EQUALS               = 0x3D; /* = */
+var CHAR_GREATER_THAN         = 0x3E; /* > */
+var CHAR_QUESTION             = 0x3F; /* ? */
+var CHAR_COMMERCIAL_AT        = 0x40; /* @ */
+var CHAR_LEFT_SQUARE_BRACKET  = 0x5B; /* [ */
+var CHAR_RIGHT_SQUARE_BRACKET = 0x5D; /* ] */
+var CHAR_GRAVE_ACCENT         = 0x60; /* ` */
+var CHAR_LEFT_CURLY_BRACKET   = 0x7B; /* { */
+var CHAR_VERTICAL_LINE        = 0x7C; /* | */
+var CHAR_RIGHT_CURLY_BRACKET  = 0x7D; /* } */
+
+var ESCAPE_SEQUENCES = {};
+
+ESCAPE_SEQUENCES[0x00]   = '\\0';
+ESCAPE_SEQUENCES[0x07]   = '\\a';
+ESCAPE_SEQUENCES[0x08]   = '\\b';
+ESCAPE_SEQUENCES[0x09]   = '\\t';
+ESCAPE_SEQUENCES[0x0A]   = '\\n';
+ESCAPE_SEQUENCES[0x0B]   = '\\v';
+ESCAPE_SEQUENCES[0x0C]   = '\\f';
+ESCAPE_SEQUENCES[0x0D]   = '\\r';
+ESCAPE_SEQUENCES[0x1B]   = '\\e';
+ESCAPE_SEQUENCES[0x22]   = '\\"';
+ESCAPE_SEQUENCES[0x5C]   = '\\\\';
+ESCAPE_SEQUENCES[0x85]   = '\\N';
+ESCAPE_SEQUENCES[0xA0]   = '\\_';
+ESCAPE_SEQUENCES[0x2028] = '\\L';
+ESCAPE_SEQUENCES[0x2029] = '\\P';
+
+var DEPRECATED_BOOLEANS_SYNTAX = [
+  'y', 'Y', 'yes', 'Yes', 'YES', 'on', 'On', 'ON',
+  'n', 'N', 'no', 'No', 'NO', 'off', 'Off', 'OFF'
+];
+
+var DEPRECATED_BASE60_SYNTAX = /^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;
+
+function compileStyleMap(schema, map) {
+  var result, keys, index, length, tag, style, type;
+
+  if (map === null) return {};
+
+  result = {};
+  keys = Object.keys(map);
+
+  for (index = 0, length = keys.length; index < length; index += 1) {
+    tag = keys[index];
+    style = String(map[tag]);
+
+    if (tag.slice(0, 2) === '!!') {
+      tag = 'tag:yaml.org,2002:' + tag.slice(2);
+    }
+    type = schema.compiledTypeMap['fallback'][tag];
+
+    if (type && _hasOwnProperty.call(type.styleAliases, style)) {
+      style = type.styleAliases[style];
+    }
+
+    result[tag] = style;
+  }
+
+  return result;
+}
+
+function encodeHex(character) {
+  var string, handle, length;
+
+  string = character.toString(16).toUpperCase();
+
+  if (character <= 0xFF) {
+    handle = 'x';
+    length = 2;
+  } else if (character <= 0xFFFF) {
+    handle = 'u';
+    length = 4;
+  } else if (character <= 0xFFFFFFFF) {
+    handle = 'U';
+    length = 8;
+  } else {
+    throw new YAMLException('code point within a string may not be greater than 0xFFFFFFFF');
+  }
+
+  return '\\' + handle + common.repeat('0', length - string.length) + string;
+}
+
+
+var QUOTING_TYPE_SINGLE = 1,
+    QUOTING_TYPE_DOUBLE = 2;
+
+function State(options) {
+  this.schema        = options['schema'] || DEFAULT_SCHEMA;
+  this.indent        = Math.max(1, (options['indent'] || 2));
+  this.noArrayIndent = options['noArrayIndent'] || false;
+  this.skipInvalid   = options['skipInvalid'] || false;
+  this.flowLevel     = (common.isNothing(options['flowLevel']) ? -1 : options['flowLevel']);
+  this.styleMap      = compileStyleMap(this.schema, options['styles'] || null);
+  this.sortKeys      = options['sortKeys'] || false;
+  this.lineWidth     = options['lineWidth'] || 80;
+  this.noRefs        = options['noRefs'] || false;
+  this.noCompatMode  = options['noCompatMode'] || false;
+  this.condenseFlow  = options['condenseFlow'] || false;
+  this.quotingType   = options['quotingType'] === '"' ? QUOTING_TYPE_DOUBLE : QUOTING_TYPE_SINGLE;
+  this.forceQuotes   = options['forceQuotes'] || false;
+  this.replacer      = typeof options['replacer'] === 'function' ? options['replacer'] : null;
+
+  this.implicitTypes = this.schema.compiledImplicit;
+  this.explicitTypes = this.schema.compiledExplicit;
+
+  this.tag = null;
+  this.result = '';
+
+  this.duplicates = [];
+  this.usedDuplicates = null;
+}
+
+// Indents every line in a string. Empty lines (\n only) are not indented.
+function indentString(string, spaces) {
+  var ind = common.repeat(' ', spaces),
+      position = 0,
+      next = -1,
+      result = '',
+      line,
+      length = string.length;
+
+  while (position < length) {
+    next = string.indexOf('\n', position);
+    if (next === -1) {
+      line = string.slice(position);
+      position = length;
+    } else {
+      line = string.slice(position, next + 1);
+      position = next + 1;
+    }
+
+    if (line.length && line !== '\n') result += ind;
+
+    result += line;
+  }
+
+  return result;
+}
+
+function generateNextLine(state, level) {
+  return '\n' + common.repeat(' ', state.indent * level);
+}
+
+function testImplicitResolving(state, str) {
+  var index, length, type;
+
+  for (index = 0, length = state.implicitTypes.length; index < length; index += 1) {
+    type = state.implicitTypes[index];
+
+    if (type.resolve(str)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// [33] s-white ::= s-space | s-tab
+function isWhitespace(c) {
+  return c === CHAR_SPACE || c === CHAR_TAB;
+}
+
+// Returns true if the character can be printed without escaping.
+// From YAML 1.2: "any allowed characters known to be non-printable
+// should also be escaped. [However,] This isn’t mandatory"
+// Derived from nb-char - \t - #x85 - #xA0 - #x2028 - #x2029.
+function isPrintable(c) {
+  return  (0x00020 <= c && c <= 0x00007E)
+      || ((0x000A1 <= c && c <= 0x00D7FF) && c !== 0x2028 && c !== 0x2029)
+      || ((0x0E000 <= c && c <= 0x00FFFD) && c !== CHAR_BOM)
+      ||  (0x10000 <= c && c <= 0x10FFFF);
+}
+
+// [34] ns-char ::= nb-char - s-white
+// [27] nb-char ::= c-printable - b-char - c-byte-order-mark
+// [26] b-char  ::= b-line-feed | b-carriage-return
+// Including s-white (for some reason, examples doesn't match specs in this aspect)
+// ns-char ::= c-printable - b-line-feed - b-carriage-return - c-byte-order-mark
+function isNsCharOrWhitespace(c) {
+  return isPrintable(c)
+    && c !== CHAR_BOM
+    // - b-char
+    && c !== CHAR_CARRIAGE_RETURN
+    && c !== CHAR_LINE_FEED;
+}
+
+// [127]  ns-plain-safe(c) ::= c = flow-out  ⇒ ns-plain-safe-out
+//                             c = flow-in   ⇒ ns-plain-safe-in
+//                             c = block-key ⇒ ns-plain-safe-out
+//                             c = flow-key  ⇒ ns-plain-safe-in
+// [128] ns-plain-safe-out ::= ns-char
+// [129]  ns-plain-safe-in ::= ns-char - c-flow-indicator
+// [130]  ns-plain-char(c) ::=  ( ns-plain-safe(c) - “:” - “#” )
+//                            | ( /* An ns-char preceding */ “#” )
+//                            | ( “:” /* Followed by an ns-plain-safe(c) */ )
+function isPlainSafe(c, prev, inblock) {
+  var cIsNsCharOrWhitespace = isNsCharOrWhitespace(c);
+  var cIsNsChar = cIsNsCharOrWhitespace && !isWhitespace(c);
+  return (
+    // ns-plain-safe
+    inblock ? // c = flow-in
+      cIsNsCharOrWhitespace
+      : cIsNsCharOrWhitespace
+        // - c-flow-indicator
+        && c !== CHAR_COMMA
+        && c !== CHAR_LEFT_SQUARE_BRACKET
+        && c !== CHAR_RIGHT_SQUARE_BRACKET
+        && c !== CHAR_LEFT_CURLY_BRACKET
+        && c !== CHAR_RIGHT_CURLY_BRACKET
+  )
+    // ns-plain-char
+    && c !== CHAR_SHARP // false on '#'
+    && !(prev === CHAR_COLON && !cIsNsChar) // false on ': '
+    || (isNsCharOrWhitespace(prev) && !isWhitespace(prev) && c === CHAR_SHARP) // change to true on '[^ ]#'
+    || (prev === CHAR_COLON && cIsNsChar); // change to true on ':[^ ]'
+}
+
+// Simplified test for values allowed as the first character in plain style.
+function isPlainSafeFirst(c) {
+  // Uses a subset of ns-char - c-indicator
+  // where ns-char = nb-char - s-white.
+  // No support of ( ( “?” | “:” | “-” ) /* Followed by an ns-plain-safe(c)) */ ) part
+  return isPrintable(c) && c !== CHAR_BOM
+    && !isWhitespace(c) // - s-white
+    // - (c-indicator ::=
+    // “-” | “?” | “:” | “,” | “[” | “]” | “{” | “}”
+    && c !== CHAR_MINUS
+    && c !== CHAR_QUESTION
+    && c !== CHAR_COLON
+    && c !== CHAR_COMMA
+    && c !== CHAR_LEFT_SQUARE_BRACKET
+    && c !== CHAR_RIGHT_SQUARE_BRACKET
+    && c !== CHAR_LEFT_CURLY_BRACKET
+    && c !== CHAR_RIGHT_CURLY_BRACKET
+    // | “#” | “&” | “*” | “!” | “|” | “=” | “>” | “'” | “"”
+    && c !== CHAR_SHARP
+    && c !== CHAR_AMPERSAND
+    && c !== CHAR_ASTERISK
+    && c !== CHAR_EXCLAMATION
+    && c !== CHAR_VERTICAL_LINE
+    && c !== CHAR_EQUALS
+    && c !== CHAR_GREATER_THAN
+    && c !== CHAR_SINGLE_QUOTE
+    && c !== CHAR_DOUBLE_QUOTE
+    // | “%” | “@” | “`”)
+    && c !== CHAR_PERCENT
+    && c !== CHAR_COMMERCIAL_AT
+    && c !== CHAR_GRAVE_ACCENT;
+}
+
+// Simplified test for values allowed as the last character in plain style.
+function isPlainSafeLast(c) {
+  // just not whitespace or colon, it will be checked to be plain character later
+  return !isWhitespace(c) && c !== CHAR_COLON;
+}
+
+// Same as 'string'.codePointAt(pos), but works in older browsers.
+function codePointAt(string, pos) {
+  var first = string.charCodeAt(pos), second;
+  if (first >= 0xD800 && first <= 0xDBFF && pos + 1 < string.length) {
+    second = string.charCodeAt(pos + 1);
+    if (second >= 0xDC00 && second <= 0xDFFF) {
+      // https://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+      return (first - 0xD800) * 0x400 + second - 0xDC00 + 0x10000;
+    }
+  }
+  return first;
+}
+
+// Determines whether block indentation indicator is required.
+function needIndentIndicator(string) {
+  var leadingSpaceRe = /^\n* /;
+  return leadingSpaceRe.test(string);
+}
+
+var STYLE_PLAIN   = 1,
+    STYLE_SINGLE  = 2,
+    STYLE_LITERAL = 3,
+    STYLE_FOLDED  = 4,
+    STYLE_DOUBLE  = 5;
+
+// Determines which scalar styles are possible and returns the preferred style.
+// lineWidth = -1 => no limit.
+// Pre-conditions: str.length > 0.
+// Post-conditions:
+//    STYLE_PLAIN or STYLE_SINGLE => no \n are in the string.
+//    STYLE_LITERAL => no lines are suitable for folding (or lineWidth is -1).
+//    STYLE_FOLDED => a line > lineWidth and can be folded (and lineWidth != -1).
+function chooseScalarStyle(string, singleLineOnly, indentPerLevel, lineWidth,
+  testAmbiguousType, quotingType, forceQuotes, inblock) {
+
+  var i;
+  var char = 0;
+  var prevChar = null;
+  var hasLineBreak = false;
+  var hasFoldableLine = false; // only checked if shouldTrackWidth
+  var shouldTrackWidth = lineWidth !== -1;
+  var previousLineBreak = -1; // count the first line correctly
+  var plain = isPlainSafeFirst(codePointAt(string, 0))
+          && isPlainSafeLast(codePointAt(string, string.length - 1));
+
+  if (singleLineOnly || forceQuotes) {
+    // Case: no block styles.
+    // Check for disallowed characters to rule out plain and single.
+    for (i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+      char = codePointAt(string, i);
+      if (!isPrintable(char)) {
+        return STYLE_DOUBLE;
+      }
+      plain = plain && isPlainSafe(char, prevChar, inblock);
+      prevChar = char;
+    }
+  } else {
+    // Case: block styles permitted.
+    for (i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+      char = codePointAt(string, i);
+      if (char === CHAR_LINE_FEED) {
+        hasLineBreak = true;
+        // Check if any line can be folded.
+        if (shouldTrackWidth) {
+          hasFoldableLine = hasFoldableLine ||
+            // Foldable line = too long, and not more-indented.
+            (i - previousLineBreak - 1 > lineWidth &&
+             string[previousLineBreak + 1] !== ' ');
+          previousLineBreak = i;
+        }
+      } else if (!isPrintable(char)) {
+        return STYLE_DOUBLE;
+      }
+      plain = plain && isPlainSafe(char, prevChar, inblock);
+      prevChar = char;
+    }
+    // in case the end is missing a \n
+    hasFoldableLine = hasFoldableLine || (shouldTrackWidth &&
+      (i - previousLineBreak - 1 > lineWidth &&
+       string[previousLineBreak + 1] !== ' '));
+  }
+  // Although every style can represent \n without escaping, prefer block styles
+  // for multiline, since they're more readable and they don't add empty lines.
+  // Also prefer folding a super-long line.
+  if (!hasLineBreak && !hasFoldableLine) {
+    // Strings interpretable as another type have to be quoted;
+    // e.g. the string 'true' vs. the boolean true.
+    if (plain && !forceQuotes && !testAmbiguousType(string)) {
+      return STYLE_PLAIN;
+    }
+    return quotingType === QUOTING_TYPE_DOUBLE ? STYLE_DOUBLE : STYLE_SINGLE;
+  }
+  // Edge case: block indentation indicator can only have one digit.
+  if (indentPerLevel > 9 && needIndentIndicator(string)) {
+    return STYLE_DOUBLE;
+  }
+  // At this point we know block styles are valid.
+  // Prefer literal style unless we want to fold.
+  if (!forceQuotes) {
+    return hasFoldableLine ? STYLE_FOLDED : STYLE_LITERAL;
+  }
+  return quotingType === QUOTING_TYPE_DOUBLE ? STYLE_DOUBLE : STYLE_SINGLE;
+}
+
+// Note: line breaking/folding is implemented for only the folded style.
+// NB. We drop the last trailing newline (if any) of a returned block scalar
+//  since the dumper adds its own newline. This always works:
+//    • No ending newline => unaffected; already using strip "-" chomping.
+//    • Ending newline    => removed then restored.
+//  Importantly, this keeps the "+" chomp indicator from gaining an extra line.
+function writeScalar(state, string, level, iskey, inblock) {
+  state.dump = (function () {
+    if (string.length === 0) {
+      return state.quotingType === QUOTING_TYPE_DOUBLE ? '""' : "''";
+    }
+    if (!state.noCompatMode) {
+      if (DEPRECATED_BOOLEANS_SYNTAX.indexOf(string) !== -1 || DEPRECATED_BASE60_SYNTAX.test(string)) {
+        return state.quotingType === QUOTING_TYPE_DOUBLE ? ('"' + string + '"') : ("'" + string + "'");
+      }
+    }
+
+    var indent = state.indent * Math.max(1, level); // no 0-indent scalars
+    // As indentation gets deeper, let the width decrease monotonically
+    // to the lower bound min(state.lineWidth, 40).
+    // Note that this implies
+    //  state.lineWidth ≤ 40 + state.indent: width is fixed at the lower bound.
+    //  state.lineWidth > 40 + state.indent: width decreases until the lower bound.
+    // This behaves better than a constant minimum width which disallows narrower options,
+    // or an indent threshold which causes the width to suddenly increase.
+    var lineWidth = state.lineWidth === -1
+      ? -1 : Math.max(Math.min(state.lineWidth, 40), state.lineWidth - indent);
+
+    // Without knowing if keys are implicit/explicit, assume implicit for safety.
+    var singleLineOnly = iskey
+      // No block styles in flow mode.
+      || (state.flowLevel > -1 && level >= state.flowLevel);
+    function testAmbiguity(string) {
+      return testImplicitResolving(state, string);
+    }
+
+    switch (chooseScalarStyle(string, singleLineOnly, state.indent, lineWidth,
+      testAmbiguity, state.quotingType, state.forceQuotes && !iskey, inblock)) {
+
+      case STYLE_PLAIN:
+        return string;
+      case STYLE_SINGLE:
+        return "'" + string.replace(/'/g, "''") + "'";
+      case STYLE_LITERAL:
+        return '|' + blockHeader(string, state.indent)
+          + dropEndingNewline(indentString(string, indent));
+      case STYLE_FOLDED:
+        return '>' + blockHeader(string, state.indent)
+          + dropEndingNewline(indentString(foldString(string, lineWidth), indent));
+      case STYLE_DOUBLE:
+        return '"' + escapeString(string, lineWidth) + '"';
+      default:
+        throw new YAMLException('impossible error: invalid scalar style');
+    }
+  }());
+}
+
+// Pre-conditions: string is valid for a block scalar, 1 <= indentPerLevel <= 9.
+function blockHeader(string, indentPerLevel) {
+  var indentIndicator = needIndentIndicator(string) ? String(indentPerLevel) : '';
+
+  // note the special case: the string '\n' counts as a "trailing" empty line.
+  var clip =          string[string.length - 1] === '\n';
+  var keep = clip && (string[string.length - 2] === '\n' || string === '\n');
+  var chomp = keep ? '+' : (clip ? '' : '-');
+
+  return indentIndicator + chomp + '\n';
+}
+
+// (See the note for writeScalar.)
+function dropEndingNewline(string) {
+  return string[string.length - 1] === '\n' ? string.slice(0, -1) : string;
+}
+
+// Note: a long line without a suitable break point will exceed the width limit.
+// Pre-conditions: every char in str isPrintable, str.length > 0, width > 0.
+function foldString(string, width) {
+  // In folded style, $k$ consecutive newlines output as $k+1$ newlines—
+  // unless they're before or after a more-indented line, or at the very
+  // beginning or end, in which case $k$ maps to $k$.
+  // Therefore, parse each chunk as newline(s) followed by a content line.
+  var lineRe = /(\n+)([^\n]*)/g;
+
+  // first line (possibly an empty line)
+  var result = (function () {
+    var nextLF = string.indexOf('\n');
+    nextLF = nextLF !== -1 ? nextLF : string.length;
+    lineRe.lastIndex = nextLF;
+    return foldLine(string.slice(0, nextLF), width);
+  }());
+  // If we haven't reached the first content line yet, don't add an extra \n.
+  var prevMoreIndented = string[0] === '\n' || string[0] === ' ';
+  var moreIndented;
+
+  // rest of the lines
+  var match;
+  while ((match = lineRe.exec(string))) {
+    var prefix = match[1], line = match[2];
+    moreIndented = (line[0] === ' ');
+    result += prefix
+      + (!prevMoreIndented && !moreIndented && line !== ''
+        ? '\n' : '')
+      + foldLine(line, width);
+    prevMoreIndented = moreIndented;
+  }
+
+  return result;
+}
+
+// Greedy line breaking.
+// Picks the longest line under the limit each time,
+// otherwise settles for the shortest line over the limit.
+// NB. More-indented lines *cannot* be folded, as that would add an extra \n.
+function foldLine(line, width) {
+  if (line === '' || line[0] === ' ') return line;
+
+  // Since a more-indented line adds a \n, breaks can't be followed by a space.
+  var breakRe = / [^ ]/g; // note: the match index will always be <= length-2.
+  var match;
+  // start is an inclusive index. end, curr, and next are exclusive.
+  var start = 0, end, curr = 0, next = 0;
+  var result = '';
+
+  // Invariants: 0 <= start <= length-1.
+  //   0 <= curr <= next <= max(0, length-2). curr - start <= width.
+  // Inside the loop:
+  //   A match implies length >= 2, so curr and next are <= length-2.
+  while ((match = breakRe.exec(line))) {
+    next = match.index;
+    // maintain invariant: curr - start <= width
+    if (next - start > width) {
+      end = (curr > start) ? curr : next; // derive end <= length-2
+      result += '\n' + line.slice(start, end);
+      // skip the space that was output as \n
+      start = end + 1;                    // derive start <= length-1
+    }
+    curr = next;
+  }
+
+  // By the invariants, start <= length-1, so there is something left over.
+  // It is either the whole string or a part starting from non-whitespace.
+  result += '\n';
+  // Insert a break if the remainder is too long and there is a break available.
+  if (line.length - start > width && curr > start) {
+    result += line.slice(start, curr) + '\n' + line.slice(curr + 1);
+  } else {
+    result += line.slice(start);
+  }
+
+  return result.slice(1); // drop extra \n joiner
+}
+
+// Escapes a double-quoted string.
+function escapeString(string) {
+  var result = '';
+  var char = 0;
+  var escapeSeq;
+
+  for (var i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+    char = codePointAt(string, i);
+    escapeSeq = ESCAPE_SEQUENCES[char];
+
+    if (!escapeSeq && isPrintable(char)) {
+      result += string[i];
+      if (char >= 0x10000) result += string[i + 1];
+    } else {
+      result += escapeSeq || encodeHex(char);
+    }
+  }
+
+  return result;
+}
+
+function writeFlowSequence(state, level, object) {
+  var _result = '',
+      _tag    = state.tag,
+      index,
+      length,
+      value;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    value = object[index];
+
+    if (state.replacer) {
+      value = state.replacer.call(object, String(index), value);
+    }
+
+    // Write only valid elements, put null instead of invalid elements.
+    if (writeNode(state, level, value, false, false) ||
+        (typeof value === 'undefined' &&
+         writeNode(state, level, null, false, false))) {
+
+      if (_result !== '') _result += ',' + (!state.condenseFlow ? ' ' : '');
+      _result += state.dump;
+    }
+  }
+
+  state.tag = _tag;
+  state.dump = '[' + _result + ']';
+}
+
+function writeBlockSequence(state, level, object, compact) {
+  var _result = '',
+      _tag    = state.tag,
+      index,
+      length,
+      value;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    value = object[index];
+
+    if (state.replacer) {
+      value = state.replacer.call(object, String(index), value);
+    }
+
+    // Write only valid elements, put null instead of invalid elements.
+    if (writeNode(state, level + 1, value, true, true, false, true) ||
+        (typeof value === 'undefined' &&
+         writeNode(state, level + 1, null, true, true, false, true))) {
+
+      if (!compact || _result !== '') {
+        _result += generateNextLine(state, level);
+      }
+
+      if (state.dump && CHAR_LINE_FEED === state.dump.charCodeAt(0)) {
+        _result += '-';
+      } else {
+        _result += '- ';
+      }
+
+      _result += state.dump;
+    }
+  }
+
+  state.tag = _tag;
+  state.dump = _result || '[]'; // Empty sequence if no valid values.
+}
+
+function writeFlowMapping(state, level, object) {
+  var _result       = '',
+      _tag          = state.tag,
+      objectKeyList = Object.keys(object),
+      index,
+      length,
+      objectKey,
+      objectValue,
+      pairBuffer;
+
+  for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+
+    pairBuffer = '';
+    if (_result !== '') pairBuffer += ', ';
+
+    if (state.condenseFlow) pairBuffer += '"';
+
+    objectKey = objectKeyList[index];
+    objectValue = object[objectKey];
+
+    if (state.replacer) {
+      objectValue = state.replacer.call(object, objectKey, objectValue);
+    }
+
+    if (!writeNode(state, level, objectKey, false, false)) {
+      continue; // Skip this pair because of invalid key;
+    }
+
+    if (state.dump.length > 1024) pairBuffer += '? ';
+
+    pairBuffer += state.dump + (state.condenseFlow ? '"' : '') + ':' + (state.condenseFlow ? '' : ' ');
+
+    if (!writeNode(state, level, objectValue, false, false)) {
+      continue; // Skip this pair because of invalid value.
+    }
+
+    pairBuffer += state.dump;
+
+    // Both key and value are valid.
+    _result += pairBuffer;
+  }
+
+  state.tag = _tag;
+  state.dump = '{' + _result + '}';
+}
+
+function writeBlockMapping(state, level, object, compact) {
+  var _result       = '',
+      _tag          = state.tag,
+      objectKeyList = Object.keys(object),
+      index,
+      length,
+      objectKey,
+      objectValue,
+      explicitPair,
+      pairBuffer;
+
+  // Allow sorting keys so that the output file is deterministic
+  if (state.sortKeys === true) {
+    // Default sorting
+    objectKeyList.sort();
+  } else if (typeof state.sortKeys === 'function') {
+    // Custom sort function
+    objectKeyList.sort(state.sortKeys);
+  } else if (state.sortKeys) {
+    // Something is wrong
+    throw new YAMLException('sortKeys must be a boolean or a function');
+  }
+
+  for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+    pairBuffer = '';
+
+    if (!compact || _result !== '') {
+      pairBuffer += generateNextLine(state, level);
+    }
+
+    objectKey = objectKeyList[index];
+    objectValue = object[objectKey];
+
+    if (state.replacer) {
+      objectValue = state.replacer.call(object, objectKey, objectValue);
+    }
+
+    if (!writeNode(state, level + 1, objectKey, true, true, true)) {
+      continue; // Skip this pair because of invalid key.
+    }
+
+    explicitPair = (state.tag !== null && state.tag !== '?') ||
+                   (state.dump && state.dump.length > 1024);
+
+    if (explicitPair) {
+      if (state.dump && CHAR_LINE_FEED === state.dump.charCodeAt(0)) {
+        pairBuffer += '?';
+      } else {
+        pairBuffer += '? ';
+      }
+    }
+
+    pairBuffer += state.dump;
+
+    if (explicitPair) {
+      pairBuffer += generateNextLine(state, level);
+    }
+
+    if (!writeNode(state, level + 1, objectValue, true, explicitPair)) {
+      continue; // Skip this pair because of invalid value.
+    }
+
+    if (state.dump && CHAR_LINE_FEED === state.dump.charCodeAt(0)) {
+      pairBuffer += ':';
+    } else {
+      pairBuffer += ': ';
+    }
+
+    pairBuffer += state.dump;
+
+    // Both key and value are valid.
+    _result += pairBuffer;
+  }
+
+  state.tag = _tag;
+  state.dump = _result || '{}'; // Empty mapping if no valid pairs.
+}
+
+function detectType(state, object, explicit) {
+  var _result, typeList, index, length, type, style;
+
+  typeList = explicit ? state.explicitTypes : state.implicitTypes;
+
+  for (index = 0, length = typeList.length; index < length; index += 1) {
+    type = typeList[index];
+
+    if ((type.instanceOf  || type.predicate) &&
+        (!type.instanceOf || ((typeof object === 'object') && (object instanceof type.instanceOf))) &&
+        (!type.predicate  || type.predicate(object))) {
+
+      if (explicit) {
+        if (type.multi && type.representName) {
+          state.tag = type.representName(object);
+        } else {
+          state.tag = type.tag;
+        }
+      } else {
+        state.tag = '?';
+      }
+
+      if (type.represent) {
+        style = state.styleMap[type.tag] || type.defaultStyle;
+
+        if (_toString.call(type.represent) === '[object Function]') {
+          _result = type.represent(object, style);
+        } else if (_hasOwnProperty.call(type.represent, style)) {
+          _result = type.represent[style](object, style);
+        } else {
+          throw new YAMLException('!<' + type.tag + '> tag resolver accepts not "' + style + '" style');
+        }
+
+        state.dump = _result;
+      }
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Serializes `object` and writes it to global `result`.
+// Returns true on success, or false on invalid object.
+//
+function writeNode(state, level, object, block, compact, iskey, isblockseq) {
+  state.tag = null;
+  state.dump = object;
+
+  if (!detectType(state, object, false)) {
+    detectType(state, object, true);
+  }
+
+  var type = _toString.call(state.dump);
+  var inblock = block;
+  var tagStr;
+
+  if (block) {
+    block = (state.flowLevel < 0 || state.flowLevel > level);
+  }
+
+  var objectOrArray = type === '[object Object]' || type === '[object Array]',
+      duplicateIndex,
+      duplicate;
+
+  if (objectOrArray) {
+    duplicateIndex = state.duplicates.indexOf(object);
+    duplicate = duplicateIndex !== -1;
+  }
+
+  if ((state.tag !== null && state.tag !== '?') || duplicate || (state.indent !== 2 && level > 0)) {
+    compact = false;
+  }
+
+  if (duplicate && state.usedDuplicates[duplicateIndex]) {
+    state.dump = '*ref_' + duplicateIndex;
+  } else {
+    if (objectOrArray && duplicate && !state.usedDuplicates[duplicateIndex]) {
+      state.usedDuplicates[duplicateIndex] = true;
+    }
+    if (type === '[object Object]') {
+      if (block && (Object.keys(state.dump).length !== 0)) {
+        writeBlockMapping(state, level, state.dump, compact);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + state.dump;
+        }
+      } else {
+        writeFlowMapping(state, level, state.dump);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
+        }
+      }
+    } else if (type === '[object Array]') {
+      if (block && (state.dump.length !== 0)) {
+        if (state.noArrayIndent && !isblockseq && level > 0) {
+          writeBlockSequence(state, level - 1, state.dump, compact);
+        } else {
+          writeBlockSequence(state, level, state.dump, compact);
+        }
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + state.dump;
+        }
+      } else {
+        writeFlowSequence(state, level, state.dump);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
+        }
+      }
+    } else if (type === '[object String]') {
+      if (state.tag !== '?') {
+        writeScalar(state, state.dump, level, iskey, inblock);
+      }
+    } else if (type === '[object Undefined]') {
+      return false;
+    } else {
+      if (state.skipInvalid) return false;
+      throw new YAMLException('unacceptable kind of an object to dump ' + type);
+    }
+
+    if (state.tag !== null && state.tag !== '?') {
+      // Need to encode all characters except those allowed by the spec:
+      //
+      // [35] ns-dec-digit    ::=  [#x30-#x39] /* 0-9 */
+      // [36] ns-hex-digit    ::=  ns-dec-digit
+      //                         | [#x41-#x46] /* A-F */ | [#x61-#x66] /* a-f */
+      // [37] ns-ascii-letter ::=  [#x41-#x5A] /* A-Z */ | [#x61-#x7A] /* a-z */
+      // [38] ns-word-char    ::=  ns-dec-digit | ns-ascii-letter | “-”
+      // [39] ns-uri-char     ::=  “%” ns-hex-digit ns-hex-digit | ns-word-char | “#”
+      //                         | “;” | “/” | “?” | “:” | “@” | “&” | “=” | “+” | “$” | “,”
+      //                         | “_” | “.” | “!” | “~” | “*” | “'” | “(” | “)” | “[” | “]”
+      //
+      // Also need to encode '!' because it has special meaning (end of tag prefix).
+      //
+      tagStr = encodeURI(
+        state.tag[0] === '!' ? state.tag.slice(1) : state.tag
+      ).replace(/!/g, '%21');
+
+      if (state.tag[0] === '!') {
+        tagStr = '!' + tagStr;
+      } else if (tagStr.slice(0, 18) === 'tag:yaml.org,2002:') {
+        tagStr = '!!' + tagStr.slice(18);
+      } else {
+        tagStr = '!<' + tagStr + '>';
+      }
+
+      state.dump = tagStr + ' ' + state.dump;
+    }
+  }
+
+  return true;
+}
+
+function getDuplicateReferences(object, state) {
+  var objects = [],
+      duplicatesIndexes = [],
+      index,
+      length;
+
+  inspectNode(object, objects, duplicatesIndexes);
+
+  for (index = 0, length = duplicatesIndexes.length; index < length; index += 1) {
+    state.duplicates.push(objects[duplicatesIndexes[index]]);
+  }
+  state.usedDuplicates = new Array(length);
+}
+
+function inspectNode(object, objects, duplicatesIndexes) {
+  var objectKeyList,
+      index,
+      length;
+
+  if (object !== null && typeof object === 'object') {
+    index = objects.indexOf(object);
+    if (index !== -1) {
+      if (duplicatesIndexes.indexOf(index) === -1) {
+        duplicatesIndexes.push(index);
+      }
+    } else {
+      objects.push(object);
+
+      if (Array.isArray(object)) {
+        for (index = 0, length = object.length; index < length; index += 1) {
+          inspectNode(object[index], objects, duplicatesIndexes);
+        }
+      } else {
+        objectKeyList = Object.keys(object);
+
+        for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+          inspectNode(object[objectKeyList[index]], objects, duplicatesIndexes);
+        }
+      }
+    }
+  }
+}
+
+function dump(input, options) {
+  options = options || {};
+
+  var state = new State(options);
+
+  if (!state.noRefs) getDuplicateReferences(input, state);
+
+  var value = input;
+
+  if (state.replacer) {
+    value = state.replacer.call({ '': value }, '', value);
+  }
+
+  if (writeNode(state, 0, value, true, true)) return state.dump + '\n';
+
+  return '';
+}
+
+module.exports.dump = dump;
+
+
+/***/ }),
+/* 31 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Audio Discovery Service
+ *
+ * Scans .codex files and extracts audio/text pairs for TTS training
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AudioDiscoveryService = void 0;
+const path = __importStar(__webpack_require__(4));
+const fs = __importStar(__webpack_require__(32));
+class AudioDiscoveryService {
+    workspaceRoot;
+    constructor(workspaceRoot) {
+        this.workspaceRoot = workspaceRoot;
+    }
+    /**
+     * Discover all audio/text pairs from .codex files
+     */
+    async discoverAudio(options = {}) {
+        const baseDir = options.baseDir || './files/target';
+        const basePath = path.join(this.workspaceRoot, baseDir);
+        // Find all .codex files
+        const codexFiles = await this.findCodexFiles(basePath);
+        if (codexFiles.length === 0) {
+            throw new Error(`No .codex files found in ${baseDir}`);
+        }
+        // Parse all .codex files and extract verses
+        const allVerses = [];
+        const books = new Set();
+        const versesByBook = new Map();
+        const audioByBook = new Map();
+        for (const codexFilePath of codexFiles) {
+            const verses = await this.parseCodexFile(codexFilePath, options);
+            for (const verse of verses) {
+                // Apply filters (only if verse has Bible reference data)
+                if (verse.book) {
+                    if (options.filterBooks && !options.filterBooks.includes(verse.book)) {
+                        continue;
+                    }
+                    if (options.verseRange && !this.matchesVerseRange(verse, options.verseRange)) {
+                        continue;
+                    }
+                    books.add(verse.book);
+                    // Update counts
+                    versesByBook.set(verse.book, (versesByBook.get(verse.book) || 0) + 1);
+                    if (verse.hasAudio) {
+                        audioByBook.set(verse.book, (audioByBook.get(verse.book) || 0) + 1);
+                    }
+                }
+                allVerses.push(verse);
+            }
+        }
+        // Sort verses by book, chapter, verse (verses without Bible refs go to end)
+        allVerses.sort((a, b) => {
+            // Verses without book info go to the end
+            if (!a.book && !b.book) {
+                return 0;
+            }
+            if (!a.book) {
+                return 1;
+            }
+            if (!b.book) {
+                return -1;
+            }
+            if (a.book !== b.book) {
+                return a.book.localeCompare(b.book);
+            }
+            // Handle missing chapter/verse
+            const aChapter = a.chapter ?? 0;
+            const bChapter = b.chapter ?? 0;
+            if (aChapter !== bChapter) {
+                return aChapter - bChapter;
+            }
+            const aVerse = a.verse ?? 0;
+            const bVerse = b.verse ?? 0;
+            return aVerse - bVerse;
+        });
+        const versesWithAudio = allVerses.filter(v => v.hasAudio).length;
+        return {
+            totalVerses: allVerses.length,
+            versesWithAudio,
+            versesWithoutAudio: allVerses.length - versesWithAudio,
+            verses: allVerses,
+            books: Array.from(books).sort(),
+            versesByBook,
+            audioByBook
+        };
+    }
+    /**
+     * Find all .codex files in the specified directory
+     */
+    async findCodexFiles(baseDir) {
+        const codexFiles = [];
+        try {
+            await this.findCodexFilesRecursive(baseDir, codexFiles);
+        }
+        catch (error) {
+            if (error.code === 'ENOENT') {
+                throw new Error(`Directory not found: ${baseDir}`);
+            }
+            throw error;
+        }
+        return codexFiles;
+    }
+    /**
+     * Recursively find .codex files
+     */
+    async findCodexFilesRecursive(dir, results) {
+        try {
+            const entries = await fs.readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    await this.findCodexFilesRecursive(fullPath, results);
+                }
+                else if (entry.isFile() && entry.name.endsWith('.codex')) {
+                    results.push(fullPath);
+                }
+            }
+        }
+        catch (error) {
+            // Skip directories we can't read
+            console.warn(`Could not read directory ${dir}:`, error);
+        }
+    }
+    /**
+     * Parse a single .codex file and extract verse audio information
+     */
+    async parseCodexFile(filePath, options) {
+        const verses = [];
+        try {
+            // Read and parse the .codex file
+            const content = await fs.readFile(filePath, 'utf-8');
+            const codexData = JSON.parse(content);
+            // Extract book name from filename (e.g., "JHN.codex" -> "JHN")
+            const fileName = path.basename(filePath, '.codex');
+            const book = fileName.toUpperCase();
+            // Process each cell
+            for (const cell of codexData.cells) {
+                const verse = await this.extractVerseFromCell(cell, book, filePath, options);
+                if (verse) {
+                    verses.push(verse);
+                }
+            }
+        }
+        catch (error) {
+            console.error(`Error parsing .codex file ${filePath}:`, error);
+            throw new Error(`Failed to parse .codex file: ${filePath}`);
+        }
+        return verses;
+    }
+    /**
+     * Parse a Bible reference string into its components
+     * Format: "BOOK CHAPTER:VERSE[-VERSE]" (e.g., "JHN 1:1", "MAT 5:1-10")
+     * Returns null if the reference cannot be parsed
+     */
+    parseBibleReference(reference) {
+        const parts = reference.split(' ');
+        if (parts.length !== 2) {
+            return null;
+        }
+        const book = parts[0];
+        const chapterVerse = parts[1];
+        const cvParts = chapterVerse.split(':');
+        if (cvParts.length !== 2) {
+            return null;
+        }
+        const chapter = parseInt(cvParts[0], 10);
+        const verseParts = cvParts[1].split('-');
+        const verse = parseInt(verseParts[0], 10);
+        if (isNaN(chapter) || isNaN(verse)) {
+            return null;
+        }
+        return { book, chapter, verse };
+    }
+    /**
+     * Extract verse information from a .codex cell
+     */
+    async extractVerseFromCell(cell, book, codexFilePath, options) {
+        // Only process text cells
+        if (cell.metadata.type !== 'text') {
+            return null;
+        }
+        const cellId = cell.metadata.id;
+        // Determine where to find the Bible reference
+        // Old format: ID contains the Bible reference (has a colon, e.g., "JHN 1:1")
+        // New format: ID is alphanumeric (UUID), Bible reference is in data.globalReferences
+        let bibleRefString;
+        if (cellId.includes(':')) {
+            // Old format: ID is the Bible reference
+            bibleRefString = cellId;
+        }
+        else {
+            // New format: Check data.globalReferences
+            if (cell.metadata.data?.globalReferences && cell.metadata.data.globalReferences.length > 0) {
+                bibleRefString = cell.metadata.data.globalReferences[0];
+            }
+        }
+        // Parse the Bible reference if we found one
+        let parsedRef = null;
+        if (bibleRefString) {
+            parsedRef = this.parseBibleReference(bibleRefString);
+            if (!parsedRef) {
+                console.warn(`Could not parse Bible reference: ${bibleRefString}`);
+            }
+        }
+        // Check for audio
+        let hasAudio = false;
+        let hasLocalAudio = false;
+        let audioPath;
+        let audioId;
+        if (cell.metadata.attachments && cell.metadata.selectedAudioId) {
+            const selectedAudio = cell.metadata.attachments[cell.metadata.selectedAudioId];
+            if (selectedAudio && !selectedAudio.isDeleted) {
+                audioId = cell.metadata.selectedAudioId;
+                // The URL in the .codex file is relative to the project root
+                // e.g., ".project/attachments/files/JHN/audio-xxx.webm"
+                const relativeAudioPath = selectedAudio.url;
+                // Convert to absolute path for the files/ folder
+                const absoluteFilesPath = path.join(path.dirname(codexFilePath), '..', '..', relativeAudioPath);
+                // Build the corresponding pointers/ path
+                const absolutePointersPath = absoluteFilesPath.replace(`${path.sep}.project${path.sep}attachments${path.sep}files${path.sep}`, `${path.sep}.project${path.sep}attachments${path.sep}pointers${path.sep}`);
+                // Validate file exists if requested
+                if (options.validateFiles) {
+                    // Check files/ folder (actual local audio)
+                    let filesExists = false;
+                    try {
+                        await fs.access(absoluteFilesPath);
+                        filesExists = true;
+                    }
+                    catch {
+                        // File doesn't exist in files/
+                    }
+                    // Check pointers/ folder (LFS pointer)
+                    let pointersExists = false;
+                    try {
+                        await fs.access(absolutePointersPath);
+                        pointersExists = true;
+                    }
+                    catch {
+                        // File doesn't exist in pointers/
+                    }
+                    // Audio exists if it's in either location
+                    hasAudio = filesExists || pointersExists;
+                    // Local audio only if actual file is in files/ folder
+                    hasLocalAudio = filesExists;
+                    if (hasAudio) {
+                        audioPath = relativeAudioPath;
+                    }
+                }
+                else {
+                    // Assume it exists based on metadata
+                    hasAudio = true;
+                    hasLocalAudio = false; // Unknown without validation
+                    audioPath = relativeAudioPath;
+                }
+            }
+        }
+        return {
+            cellId,
+            verseRef: bibleRefString,
+            book: parsedRef?.book,
+            chapter: parsedRef?.chapter,
+            verse: parsedRef?.verse,
+            text: cell.value,
+            hasAudio,
+            hasLocalAudio,
+            audioPath,
+            audioId
+        };
+    }
+    /**
+     * Check if a verse matches the specified verse range
+     * Only works for verses with Bible reference data
+     */
+    matchesVerseRange(verse, range) {
+        // Can't match range if verse doesn't have Bible reference data
+        if (!verse.book || verse.chapter === undefined || verse.verse === undefined) {
+            return false;
+        }
+        if (verse.book !== range.book) {
+            return false;
+        }
+        if (range.startChapter !== undefined && verse.chapter < range.startChapter) {
+            return false;
+        }
+        if (range.endChapter !== undefined && verse.chapter > range.endChapter) {
+            return false;
+        }
+        // If we're in the start chapter, check start verse
+        if (range.startChapter !== undefined &&
+            verse.chapter === range.startChapter &&
+            range.startVerse !== undefined &&
+            verse.verse < range.startVerse) {
+            return false;
+        }
+        // If we're in the end chapter, check end verse
+        if (range.endChapter !== undefined &&
+            verse.chapter === range.endChapter &&
+            range.endVerse !== undefined &&
+            verse.verse > range.endVerse) {
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Get a summary of missing audio for a specific book
+     */
+    async getMissingAudio(book) {
+        const summary = await this.discoverAudio({ filterBooks: [book] });
+        return summary.verses.filter(v => !v.hasAudio);
+    }
+    /**
+     * Get verses with audio for a specific book and chapter range
+     */
+    async getVersesWithAudio(book, startChapter, endChapter) {
+        const summary = await this.discoverAudio({
+            filterBooks: [book],
+            verseRange: {
+                book,
+                startChapter,
+                endChapter
+            }
+        });
+        return summary.verses.filter(v => v.hasAudio);
+    }
+    /**
+     * Validate audio sufficiency for training
+     * Returns true if there are enough audio samples
+     */
+    validateAudioSufficiency(summary, minSamples = 10) {
+        const count = summary.versesWithAudio;
+        const sufficient = count >= minSamples;
+        return {
+            sufficient,
+            count,
+            required: minSamples,
+            message: sufficient
+                ? `Found ${count} audio samples (minimum ${minSamples} required)`
+                : `Insufficient audio: found ${count}, need at least ${minSamples} samples`
+        };
+    }
+}
+exports.AudioDiscoveryService = AudioDiscoveryService;
+
+
+/***/ }),
+/* 32 */
+/***/ ((module) => {
+
+module.exports = require("fs/promises");
+
+/***/ }),
+/* 33 */
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * Service for performing preflight checks before job submission
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PreflightService = void 0;
+/**
+ * Minimum recommended audio pairs for training
+ */
+const MIN_RECOMMENDED_AUDIO_PAIRS = 50;
+/**
+ * Service for validating job parameters before submission
+ */
+class PreflightService {
+    audioDiscoveryService;
+    manifestService;
+    gitlabService;
+    constructor(audioDiscoveryService, manifestService, gitlabService) {
+        this.audioDiscoveryService = audioDiscoveryService;
+        this.manifestService = manifestService;
+        this.gitlabService = gitlabService;
+    }
+    /**
+     * Perform all preflight checks for a job
+     */
+    async performChecks(params) {
+        const errors = [];
+        const warnings = [];
+        // Get audio statistics
+        const audioStats = await this.checkAudioData(params, errors, warnings);
+        // Check for running jobs
+        await this.checkRunningJobs(warnings);
+        // Check base model if specified
+        if (params.baseCheckpoint) {
+            await this.checkBaseModel(params.baseCheckpoint, errors);
+        }
+        // Check GitLab connectivity
+        await this.checkGitLabConnectivity(errors);
+        // Validate verse selection for training and inference separately
+        const hasTrainingVerses = !!(params.trainingIncludeVerses || params.trainingExcludeVerses);
+        const hasInferenceVerses = !!(params.inferenceIncludeVerses || params.inferenceExcludeVerses);
+        if (hasTrainingVerses) {
+            this.validateVerseSelection(params.trainingIncludeVerses, params.trainingExcludeVerses, 'Training', warnings);
+        }
+        if (hasInferenceVerses) {
+            this.validateVerseSelection(params.inferenceIncludeVerses, params.inferenceExcludeVerses, 'Inference', warnings);
+        }
+        // Check if mode requires certain parameters
+        this.validateModeRequirements(params, errors);
+        return {
+            passed: errors.length === 0,
+            errors,
+            warnings,
+            audioStats
+        };
+    }
+    /**
+     * Check audio data availability and quality
+     */
+    async checkAudioData(params, errors, warnings) {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const totalPairs = summary.totalVerses;
+            const missingRecordings = summary.versesWithoutAudio;
+            const coveragePercentage = (summary.versesWithAudio / summary.totalVerses) * 100;
+            // For training modes, check if we have sufficient audio
+            if (params.mode === 'training' || params.mode === 'training_and_inference') {
+                if (summary.versesWithAudio === 0) {
+                    errors.push('No audio recordings found. Training requires audio data.');
+                }
+                else if (summary.versesWithAudio < MIN_RECOMMENDED_AUDIO_PAIRS) {
+                    warnings.push(`Only ${summary.versesWithAudio} audio recordings found. ` +
+                        `Recommended minimum: ${MIN_RECOMMENDED_AUDIO_PAIRS} for quality training.`);
+                }
+            }
+            // For inference mode, check if base model is specified
+            if (params.mode === 'inference' && !params.baseCheckpoint) {
+                errors.push('Inference mode requires a base checkpoint to be specified.');
+            }
+            return {
+                totalPairs,
+                missingRecordings,
+                coveragePercentage
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(`Failed to analyze audio data: ${errorMessage}`);
+            return {
+                totalPairs: 0,
+                missingRecordings: 0,
+                coveragePercentage: 0
+            };
+        }
+    }
+    /**
+     * Check if there are already running jobs
+     */
+    async checkRunningJobs(warnings) {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            const runningJobs = jobs.filter(job => job.state === 'running');
+            const pendingJobs = jobs.filter(job => job.state === 'pending');
+            const activeCount = runningJobs.length + pendingJobs.length;
+            if (activeCount > 0) {
+                warnings.push(`${activeCount} job(s) already in the queue. ` +
+                    `New job will be queued after existing jobs.`);
+            }
+        }
+        catch (error) {
+            // Non-critical - just skip this check
+            console.warn('Failed to check running jobs:', error);
+        }
+    }
+    /**
+     * Check if base model exists (basic validation)
+     */
+    async checkBaseModel(checkpoint, errors) {
+        // For now, just do basic validation
+        // In the future, could check if the checkpoint file/job actually exists
+        if (!checkpoint || checkpoint.trim().length === 0) {
+            errors.push('Base checkpoint path cannot be empty.');
+            return;
+        }
+        // Check if it looks like a valid path or job ID
+        const isJobId = checkpoint.startsWith('job_');
+        const isPath = checkpoint.includes('/') || checkpoint.includes('\\') || checkpoint.endsWith('.pt');
+        if (!isJobId && !isPath) {
+            errors.push(`Base checkpoint "${checkpoint}" doesn't look like a valid path or job ID. ` +
+                `Expected format: "job_xxx" or "path/to/model.pt"`);
+        }
+    }
+    /**
+     * Check GitLab connectivity and project sharing capability
+     */
+    async checkGitLabConnectivity(errors) {
+        try {
+            // Check if we can get the project ID
+            const projectId = await this.gitlabService.getProjectIdFromWorkspace();
+            if (!projectId) {
+                errors.push('Cannot detect GitLab project. ' +
+                    'Make sure this is a Git repository with a GitLab remote.');
+                return;
+            }
+            // Check if worker is already a member (non-blocking)
+            const isMember = await this.gitlabService.isWorkerMember();
+            if (!isMember) {
+                // This is fine - we'll add them when submitting the job
+                console.log('Worker is not yet a project member (will be added on job submission)');
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(`GitLab connectivity check failed: ${errorMessage}`);
+        }
+    }
+    /**
+     * Validate verse selection parameters for a given phase
+     */
+    validateVerseSelection(includeVerses, excludeVerses, phase, warnings) {
+        if (includeVerses && excludeVerses) {
+            warnings.push(`${phase}: Both include and exclude verse lists specified. ` +
+                'Include list will take precedence.');
+        }
+        if (includeVerses && includeVerses.length === 0) {
+            warnings.push(`${phase}: Include verse list is empty - no verses will be processed.`);
+        }
+        // Basic format validation for cell references
+        const allVerses = [...(includeVerses || []), ...(excludeVerses || [])];
+        for (const verse of allVerses) {
+            if (!this.isValidVerseReference(verse)) {
+                warnings.push(`${phase}: Cell reference "${verse}" may not be in the correct format (expected: BOOK CHAPTER:VERSE or alphanumeric ID)`);
+            }
+        }
+    }
+    /**
+     * Validate that mode has required parameters
+     */
+    validateModeRequirements(params, errors) {
+        // Training modes require epochs
+        if ((params.mode === 'training' || params.mode === 'training_and_inference') && !params.epochs) {
+            errors.push('Training mode requires epoch count to be specified.');
+        }
+        // Inference mode requires base checkpoint
+        if (params.mode === 'inference' && !params.baseCheckpoint) {
+            errors.push('Inference mode requires a base checkpoint to be specified.');
+        }
+        // Validate epochs range
+        if (params.epochs !== undefined) {
+            if (params.epochs <= 0) {
+                errors.push('Epoch count must be greater than 0.');
+            }
+            if (params.epochs > 10000) {
+                errors.push('Epoch count seems unreasonably high (max: 10000).');
+            }
+        }
+    }
+    /**
+     * Basic validation for cell reference format
+     * Accepts both Bible references and alphanumeric IDs
+     */
+    isValidVerseReference(verse) {
+        // Bible reference format: "BOOK CHAPTER:VERSE" or "BOOK CHAPTER:VERSE-VERSE"
+        // Examples: "JHN 1:1", "MAT 5:1-10", "1CH 2:3"
+        const bibleRefPattern = /^[A-Z0-9]{3}\s+\d+:\d+(-\d+)?$/;
+        // Alphanumeric ID format (UUID-like or other alphanumeric)
+        // Examples: "cf5a575d-84e2-6dee-0e3a-06b719bcae7a", "abc123"
+        const alphanumericPattern = /^[a-zA-Z0-9\-]+$/;
+        const trimmed = verse.trim();
+        return bibleRefPattern.test(trimmed) || alphanumericPattern.test(trimmed);
+    }
+    /**
+     * Get a summary of audio coverage by book
+     */
+    async getAudioCoverageSummary() {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const lines = [];
+            lines.push(`Total Coverage: ${summary.versesWithAudio}/${summary.totalVerses} verses (${((summary.versesWithAudio / summary.totalVerses) * 100).toFixed(1)}%)`);
+            lines.push('');
+            lines.push('By Book:');
+            for (const book of summary.books) {
+                const totalInBook = summary.versesByBook.get(book) || 0;
+                const audioInBook = summary.audioByBook.get(book) || 0;
+                const coverage = totalInBook > 0 ? (audioInBook / totalInBook) * 100 : 0;
+                lines.push(`  ${book}: ${audioInBook}/${totalInBook} (${coverage.toFixed(1)}%)`);
+            }
+            return lines.join('\n');
+        }
+        catch (error) {
+            return 'Failed to get audio coverage summary';
+        }
+    }
+}
+exports.PreflightService = PreflightService;
+
+
+/***/ }),
+/* 34 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Tree data provider for the GPU Jobs sidebar
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.JobTreeDataProvider = exports.JobTreeItem = void 0;
+const vscode = __importStar(__webpack_require__(1));
+/**
+ * Tree item representing a single job in the sidebar
+ */
+class JobTreeItem extends vscode.TreeItem {
+    job;
+    collapsibleState;
+    constructor(job, collapsibleState) {
+        // Use job name if available, otherwise fall back to job_id
+        super(job.name || job.job_id, collapsibleState);
+        this.job = job;
+        this.collapsibleState = collapsibleState;
+        this.tooltip = this.buildTooltip();
+        this.description = this.buildDescription();
+        this.iconPath = this.getIconForState(job.state);
+        this.contextValue = this.getContextValue();
+        // Click (or double-click, depending on user settings) opens the job detail panel
+        this.command = {
+            command: 'codex-worker.viewJobDetail',
+            title: 'View Job Details',
+            arguments: [this]
+        };
+    }
+    /**
+     * Format an ISO 8601 timestamp into a human-readable local date/time string.
+     */
+    static formatTimestamp(iso) {
+        const date = new Date(iso);
+        if (isNaN(date.getTime())) {
+            return iso; // Return raw value if unparseable
+        }
+        return date.toLocaleString();
+    }
+    buildTooltip() {
+        const lines = [];
+        if (this.job.name) {
+            lines.push(`Name: ${this.job.name}`);
+        }
+        if (this.job.description) {
+            lines.push(`Description: ${this.job.description}`);
+        }
+        lines.push(`Job ID: ${this.job.job_id}`, `Type: ${this.job.job_type}`, `Mode: ${this.job.mode}`, `State: ${this.job.state}`, `Model: ${this.job.model.type}`);
+        if (this.job.model.base_checkpoint) {
+            lines.push(`Base: ${this.job.model.base_checkpoint}`);
+        }
+        // Show submitted_at if available
+        if (this.job.submitted_at) {
+            lines.push(`Submitted: ${JobTreeItem.formatTimestamp(this.job.submitted_at)}`);
+        }
+        // Show response timestamp — label depends on job state
+        if (this.job.response_timestamp) {
+            const label = (this.job.state === 'completed' || this.job.state === 'failed' || this.job.state === 'canceled')
+                ? 'Completed'
+                : 'Last Update';
+            lines.push(`${label}: ${JobTreeItem.formatTimestamp(this.job.response_timestamp)}`);
+        }
+        if (this.job.epochs) {
+            const progress = this.job.epochs_completed
+                ? `${this.job.epochs_completed}/${this.job.epochs}`
+                : `0/${this.job.epochs}`;
+            lines.push(`Epochs: ${progress}`);
+        }
+        if (this.job.worker_id) {
+            lines.push(`Worker: ${this.job.worker_id}`);
+        }
+        if (this.job.inference) {
+            if (this.job.inference.include_verses) {
+                lines.push(`Include: ${this.job.inference.include_verses.length} verses`);
+            }
+            if (this.job.inference.exclude_verses) {
+                lines.push(`Exclude: ${this.job.inference.exclude_verses.length} verses`);
+            }
+        }
+        if (this.job.error_message) {
+            lines.push(`Error: ${this.job.error_message}`);
+        }
+        if (this.job.canceled) {
+            lines.push('⚠️ Canceled by user');
+        }
+        return lines.join('\n');
+    }
+    buildDescription() {
+        const parts = [];
+        // State indicator
+        parts.push(this.getStateEmoji(this.job.state));
+        // Worker name if claimed
+        if (this.job.worker_id) {
+            parts.push(`Worker: ${this.job.worker_id}`);
+        }
+        // Epoch progress if available
+        if (this.job.epochs && this.job.state === 'running') {
+            const progress = this.job.epochs_completed || 0;
+            parts.push(`${progress}/${this.job.epochs} epochs`);
+        }
+        // Job type prefix + mode (e.g., "TTS-inference", "ASR-training")
+        const typeLabel = this.job.job_type.toUpperCase();
+        parts.push(`${typeLabel}-${this.job.mode}`);
+        return parts.join(' • ');
+    }
+    getStateEmoji(state) {
+        switch (state) {
+            case 'pending': return '⏳';
+            case 'running': return '▶️';
+            case 'completed': return '✅';
+            case 'failed': return '❌';
+            case 'canceled': return '🚫';
+            default: return '❓';
+        }
+    }
+    getIconForState(state) {
+        // Use job-type-specific icons for non-terminal states
+        const isASR = this.job.job_type === 'asr';
+        switch (state) {
+            case 'pending':
+                return new vscode.ThemeIcon(isASR ? 'mic' : 'megaphone', new vscode.ThemeColor('charts.yellow'));
+            case 'running':
+                return new vscode.ThemeIcon('play', new vscode.ThemeColor('charts.blue'));
+            case 'completed':
+                return new vscode.ThemeIcon(isASR ? 'mic' : 'megaphone', new vscode.ThemeColor('charts.green'));
+            case 'failed':
+                return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+            case 'canceled':
+                return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.gray'));
+            default:
+                return new vscode.ThemeIcon('question');
+        }
+    }
+    getContextValue() {
+        // Context value determines which commands are available in the context menu
+        const values = ['gpuJob'];
+        if (this.job.state === 'pending' || this.job.state === 'running') {
+            values.push('cancelable');
+        }
+        if (this.job.state === 'completed') {
+            values.push('completed');
+        }
+        return values.join(',');
+    }
+}
+exports.JobTreeItem = JobTreeItem;
+/**
+ * Tree data provider for GPU jobs
+ */
+class JobTreeDataProvider {
+    workspaceRoot;
+    manifestService;
+    _onDidChangeTreeData = new vscode.EventEmitter();
+    onDidChangeTreeData = this._onDidChangeTreeData.event;
+    constructor(workspaceRoot, manifestService) {
+        this.workspaceRoot = workspaceRoot;
+        this.manifestService = manifestService;
+    }
+    /**
+     * Dispose resources held by this provider
+     */
+    dispose() {
+        this._onDidChangeTreeData.dispose();
+    }
+    /**
+     * Refresh the tree view
+     */
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+    /**
+     * Get tree item for display
+     */
+    getTreeItem(element) {
+        return element;
+    }
+    /**
+     * Get children (jobs) for the tree
+     */
+    async getChildren(element) {
+        if (!this.workspaceRoot) {
+            vscode.window.showInformationMessage('No workspace folder open');
+            return [];
+        }
+        if (element) {
+            // No children for individual jobs (flat list)
+            return [];
+        }
+        try {
+            // Get all jobs with their states
+            const jobs = await this.manifestService.getJobsWithState();
+            if (jobs.length === 0) {
+                return [];
+            }
+            // Sort jobs: running first, then pending, then completed/failed/canceled
+            const sortedJobs = jobs.sort((a, b) => {
+                const stateOrder = {
+                    'running': 0,
+                    'pending': 1,
+                    'completed': 2,
+                    'failed': 3,
+                    'canceled': 4
+                };
+                const orderA = stateOrder[a.state] ?? 5;
+                const orderB = stateOrder[b.state] ?? 5;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
+                }
+                // Within same state, sort by job_id (newest first)
+                return b.job_id.localeCompare(a.job_id);
+            });
+            return sortedJobs.map((job) => new JobTreeItem(job, vscode.TreeItemCollapsibleState.None));
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to load jobs: ${errorMessage}`);
+            return [];
+        }
+    }
+    /**
+     * Get the number of active jobs (pending or running)
+     */
+    async getActiveJobCount() {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            return jobs.filter((job) => job.state === 'pending' || job.state === 'running').length;
+        }
+        catch (error) {
+            return 0;
+        }
+    }
+    /**
+     * Check if there are any running jobs
+     */
+    async hasRunningJobs() {
+        try {
+            const jobs = await this.manifestService.getJobsWithState();
+            return jobs.some((job) => job.state === 'running');
+        }
+        catch (error) {
+            return false;
+        }
+    }
+}
+exports.JobTreeDataProvider = JobTreeDataProvider;
+
+
+/***/ }),
+/* 35 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Multi-step wizard for creating new GPU jobs.
+ *
+ * Uses WebviewUI for all user interaction. The extension drives the control
+ * flow via sequential `await` calls; the webview is a stateless terminal.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NewJobWizard = void 0;
+const vscode = __importStar(__webpack_require__(1));
+const path = __importStar(__webpack_require__(4));
+const WebviewUI_1 = __webpack_require__(36);
+const privacy_1 = __webpack_require__(37);
+/**
+ * Maps job type to its default (currently only) model type.
+ * When a job type gains multiple models, this becomes a selection step.
+ */
+const JOB_TYPE_MODEL_MAP = {
+    tts: 'StableTTS',
+    asr: 'W2V2BERT',
+};
+/**
+ * Wizard for creating new jobs via a webview panel.
+ */
+class NewJobWizard {
+    audioDiscoveryService;
+    manifestService;
+    extensionUri;
+    globalState;
+    workspaceRoot;
+    constructor(audioDiscoveryService, manifestService, extensionUri, globalState) {
+        this.audioDiscoveryService = audioDiscoveryService;
+        this.manifestService = manifestService;
+        this.extensionUri = extensionUri;
+        this.globalState = globalState;
+        this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    }
+    /**
+     * Run the job creation wizard.
+     * Opens an ephemeral webview panel, walks the user through all steps,
+     * and returns the created job parameters or null if canceled.
+     *
+     * @param presets Optional pre-filled values that skip their corresponding steps.
+     *               Used when launching from job detail actions like "Further Train".
+     */
+    async run(presets) {
+        const panelTitle = presets?.contextLabel
+            ? `GPU Job: ${presets.contextLabel}`
+            : 'New GPU Job';
+        const ui = new WebviewUI_1.WebviewUI(this.extensionUri, this.workspaceRoot, panelTitle);
+        try {
+            let result = null;
+            let done = false;
+            while (!done) {
+                result = await this.runWizardSteps(ui, presets);
+                if (!result) {
+                    // User canceled at some step
+                    break;
+                }
+                // Run preflight checks
+                const preflightResult = await this.runPreflightChecks(result);
+                // Build confirmation data (with privacy info)
+                const totalVerses = await this.getTotalVerseCount();
+                const confirmData = this.buildConfirmationData(result, preflightResult, totalVerses);
+                // Add privacy consent state
+                confirmData.privacySummary = privacy_1.PRIVACY_SUMMARY;
+                const consentedVersion = this.globalState?.get(privacy_1.PRIVACY_CONSENT_KEY);
+                confirmData.privacyPreviouslyConsented = consentedVersion === privacy_1.PRIVACY_POLICY_VERSION;
+                // Show confirmation
+                const confirmAction = await ui.showConfirmation(confirmData);
+                if (confirmAction === 'submit') {
+                    // Persist privacy consent if not already stored
+                    if (!confirmData.privacyPreviouslyConsented && this.globalState) {
+                        await this.globalState.update(privacy_1.PRIVACY_CONSENT_KEY, privacy_1.PRIVACY_POLICY_VERSION);
+                    }
+                    done = true;
+                }
+                else if (confirmAction === 'start-over') {
+                    // Loop continues — restart wizard
+                    result = null;
+                }
+                else {
+                    // undefined = panel closed / canceled
+                    result = null;
+                    break;
+                }
+            }
+            return result;
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to create job: ${errorMessage}`);
+            return null;
+        }
+        finally {
+            ui.dispose();
+        }
+    }
+    /**
+     * Run through all wizard steps sequentially.
+     * Returns JobCreationParams if all steps completed, or null if canceled.
+     *
+     * When presets are provided, steps with pre-filled values are skipped
+     * and the preset value is used directly.
+     */
+    async runWizardSteps(ui, presets) {
+        // Step 1: Select job type (TTS vs ASR) — skip if preset
+        const jobType = presets?.jobType ?? await this.selectJobType(ui);
+        if (!jobType) {
+            return null;
+        }
+        // Derive model type from job type (each type currently has exactly one model)
+        const modelType = presets?.modelType ?? JOB_TYPE_MODEL_MAP[jobType];
+        // Step 2: Select job mode — skip if preset
+        const mode = presets?.mode ?? await this.selectMode(ui, jobType);
+        if (!mode) {
+            return null;
+        }
+        // Step 3: Select base checkpoint — skip if preset
+        let currentMode = mode;
+        let baseCheckpoint;
+        if (presets?.baseCheckpoint !== undefined) {
+            // Preset provided: use it directly (null = train new, string = specific checkpoint)
+            baseCheckpoint = presets.baseCheckpoint;
+        }
+        else {
+            baseCheckpoint = await this.selectBaseCheckpoint(ui, currentMode, modelType);
+            if (baseCheckpoint === undefined) {
+                // For inference-only with no checkpoints, offer to switch
+                if (currentMode === 'inference') {
+                    const switchItem = await ui.showQuickPick([
+                        { label: 'Train & Infer', description: 'Train a new model first, then run inference' },
+                        { label: 'Cancel', description: 'Go back' },
+                    ], {
+                        title: 'No Checkpoints Available',
+                        placeHolder: 'No trained model checkpoints found. Would you like to train first?',
+                    });
+                    if (switchItem?.label === 'Train & Infer') {
+                        currentMode = 'training_and_inference';
+                    }
+                    else {
+                        return null;
+                    }
+                }
+                else {
+                    return null;
+                }
+            }
+        }
+        // Step 4: Select epochs (if training) — always ask
+        let epochs;
+        if (currentMode === 'training' || currentMode === 'training_and_inference') {
+            epochs = await this.selectEpochs(ui);
+            if (epochs === undefined) {
+                return null;
+            }
+        }
+        // Step 5: Select verse filters — always ask
+        let inferenceIncludeVerses;
+        let inferenceExcludeVerses;
+        let trainingIncludeVerses;
+        let trainingExcludeVerses;
+        if (currentMode === 'training_and_inference') {
+            const trainingSelection = await this.selectVerses(ui, 'Training');
+            if (!trainingSelection) {
+                return null;
+            }
+            trainingIncludeVerses = trainingSelection.include;
+            trainingExcludeVerses = trainingSelection.exclude;
+            const inferenceSelection = await this.selectVerses(ui, 'Inference');
+            if (!inferenceSelection) {
+                return null;
+            }
+            inferenceIncludeVerses = inferenceSelection.include;
+            inferenceExcludeVerses = inferenceSelection.exclude;
+        }
+        else if (currentMode === 'training') {
+            const selection = await this.selectVerses(ui, 'Training');
+            if (!selection) {
+                return null;
+            }
+            trainingIncludeVerses = selection.include;
+            trainingExcludeVerses = selection.exclude;
+        }
+        else if (currentMode === 'inference') {
+            const selection = await this.selectVerses(ui, 'Inference');
+            if (!selection) {
+                return null;
+            }
+            inferenceIncludeVerses = selection.include;
+            inferenceExcludeVerses = selection.exclude;
+        }
+        // Step 6: Voice reference — TTS inference only, skip for ASR
+        let voiceReference;
+        if (jobType === 'tts' && (currentMode === 'inference' || currentMode === 'training_and_inference')) {
+            if (presets?.voiceReference !== undefined) {
+                voiceReference = presets.voiceReference;
+            }
+            else {
+                voiceReference = await this.selectVoiceReference(ui);
+                if (voiceReference === undefined) {
+                    return null;
+                }
+            }
+        }
+        // Step 6b: SentenceTransmorgrifier option — ASR training modes only
+        let transmorgrifierEnabled;
+        if (jobType === 'asr' && (currentMode === 'training' || currentMode === 'training_and_inference')) {
+            transmorgrifierEnabled = await this.selectTransmorgrifier(ui);
+            if (transmorgrifierEnabled === undefined) {
+                return null;
+            }
+        }
+        // Step 7: Enter optional job name
+        const jobName = await this.enterJobName(ui);
+        if (jobName === undefined) {
+            return null;
+        } // canceled
+        // Step 8: Enter optional job description
+        let jobDescription = null;
+        if (jobName) {
+            // Only ask for description if a name was provided
+            jobDescription = await this.enterJobDescription(ui);
+            if (jobDescription === undefined) {
+                return null;
+            } // canceled
+        }
+        return {
+            jobType,
+            name: jobName || undefined,
+            description: jobDescription || undefined,
+            mode: currentMode,
+            modelType,
+            baseCheckpoint: baseCheckpoint || undefined,
+            epochs,
+            inferenceIncludeVerses,
+            inferenceExcludeVerses,
+            trainingIncludeVerses,
+            trainingExcludeVerses,
+            voiceReference: voiceReference || undefined,
+            transmorgrifierEnabled,
+        };
+    }
+    // ================================================================
+    // Individual wizard steps
+    // ================================================================
+    /**
+     * Step 1: Select job type (TTS vs ASR)
+     * Replaces the old model type step — each job type currently has exactly
+     * one model, so the model is implicitly selected.
+     */
+    async selectJobType(ui) {
+        const items = [
+            {
+                label: 'Text-to-Speech (TTS)',
+                description: 'StableTTS model',
+                detail: 'Generate audio from text — train a voice model and synthesize speech',
+            },
+            {
+                label: 'Speech Recognition (ASR)',
+                description: 'W2V2-BERT model',
+                detail: 'Transcribe audio to text — train a recognition model and generate transcriptions',
+            },
+        ];
+        const selected = await ui.showQuickPick(items, {
+            title: 'Select Job Type',
+            placeHolder: 'What kind of job would you like to create?',
+        });
+        if (!selected) {
+            return null;
+        }
+        if (selected.label.includes('TTS')) {
+            return 'tts';
+        }
+        if (selected.label.includes('ASR')) {
+            return 'asr';
+        }
+        return null;
+    }
+    /**
+     * Step 2: Select job mode (job-type-aware descriptions)
+     */
+    async selectMode(ui, jobType) {
+        const isTTS = jobType === 'tts';
+        const items = [
+            {
+                label: 'Training',
+                description: isTTS
+                    ? 'Train a new TTS model'
+                    : 'Train a new ASR model',
+                detail: isTTS
+                    ? 'Creates a new model or fine-tunes an existing one'
+                    : 'Creates a new speech recognition model or fine-tunes an existing one',
+            },
+            {
+                label: 'Inference',
+                description: isTTS
+                    ? 'Generate audio from text'
+                    : 'Transcribe audio to text',
+                detail: isTTS
+                    ? 'Uses an existing model to synthesize speech'
+                    : 'Uses an existing model to generate text from audio recordings',
+            },
+            {
+                label: 'Training and Inference',
+                description: isTTS
+                    ? 'Train then generate audio'
+                    : 'Train then transcribe',
+                detail: isTTS
+                    ? 'Trains a model and then runs inference on selected verses'
+                    : 'Trains a model and then transcribes audio on selected verses',
+            },
+        ];
+        const selected = await ui.showQuickPick(items, {
+            title: 'Select Job Mode',
+            placeHolder: 'What would you like to do?',
+        });
+        if (!selected) {
+            return null;
+        }
+        const modeMap = {
+            'Training': 'training',
+            'Inference': 'inference',
+            'Training and Inference': 'training_and_inference',
+        };
+        return modeMap[selected.label] || null;
+    }
+    /**
+     * Step 3: Select base checkpoint
+     * Returns: checkpoint path string, null (no checkpoint), or undefined (canceled)
+     */
+    async selectBaseCheckpoint(ui, mode, modelType) {
+        const isRequired = mode === 'inference';
+        if (!isRequired) {
+            const items = [
+                {
+                    label: 'Train New Model',
+                    description: 'Start from scratch',
+                    detail: 'Create a brand new model without a base checkpoint',
+                },
+                {
+                    label: 'Continue From Existing Model',
+                    description: 'Fine-tune an existing model',
+                    detail: 'Select a previously trained model as the base',
+                },
+            ];
+            const selected = await ui.showQuickPick(items, {
+                title: 'Base Model',
+                placeHolder: 'Start from scratch or fine-tune an existing model?',
+            });
+            if (!selected) {
+                return undefined;
+            }
+            if (selected.label === 'Train New Model') {
+                return null; // No base checkpoint
+            }
+        }
+        // Pick a checkpoint from completed jobs
+        return this.pickCheckpoint(ui, modelType);
+    }
+    /**
+     * Reusable checkpoint picker
+     */
+    async pickCheckpoint(ui, modelType) {
+        const checkpoints = await this.manifestService.getAvailableCheckpoints(modelType);
+        if (checkpoints.length === 0) {
+            vscode.window.showWarningMessage(`No trained model checkpoints found for model type "${modelType}". Complete a training job first.`);
+            return undefined;
+        }
+        const items = checkpoints.map(cp => {
+            const parts = [];
+            if (cp.epochs) {
+                parts.push(`${cp.epochs} epochs`);
+            }
+            if (cp.timestamp) {
+                try {
+                    const date = new Date(cp.timestamp);
+                    parts.push(date.toLocaleDateString());
+                }
+                catch {
+                    // Skip
+                }
+            }
+            else if (cp.fileTimestamp) {
+                parts.push(cp.fileTimestamp.toLocaleDateString());
+            }
+            if (cp.filtered) {
+                parts.push('filtered');
+            }
+            // Use job name as label if available, otherwise fall back to job ID
+            const label = cp.jobName || cp.jobId;
+            // If we have a name, show the job ID in the description for reference
+            const descParts = cp.jobName ? [cp.jobId, ...parts] : parts;
+            return {
+                label,
+                description: descParts.join(' • '),
+                detail: cp.checkpointPath,
+            };
+        });
+        const selected = await ui.showQuickPick(items, {
+            title: 'Select Model Checkpoint',
+            placeHolder: 'Choose a trained model checkpoint',
+        });
+        if (!selected) {
+            return undefined;
+        }
+        return selected.detail;
+    }
+    /**
+     * Step 4: Select number of epochs
+     */
+    async selectEpochs(ui) {
+        const epochStr = await ui.showInputBox({
+            title: 'Training Epochs',
+            prompt: 'How many epochs should the model train for?',
+            value: '100',
+            validationRegex: '^[1-9]\\d{0,3}$',
+            validationMessage: 'Please enter a positive number between 1 and 9999',
+        });
+        if (!epochStr) {
+            return undefined;
+        }
+        return parseInt(epochStr, 10);
+    }
+    /**
+     * Step 5: Select cells for a given phase (Training or Inference)
+     */
+    async selectVerses(ui, phase) {
+        // First ask: all cells or specific?
+        const scopeItems = [
+            {
+                label: 'All Cells',
+                description: `Use all cells for ${phase.toLowerCase()}`,
+                detail: `Process every cell in the project for ${phase.toLowerCase()}`,
+            },
+            {
+                label: 'Specific Cells',
+                description: 'Choose which cells to include/exclude',
+                detail: `Manually specify cell references for ${phase.toLowerCase()}`,
+            },
+        ];
+        const scopeSelected = await ui.showQuickPick(scopeItems, {
+            title: `${phase} Cell Selection`,
+            placeHolder: `Which cells should be used for ${phase.toLowerCase()}?`,
+        });
+        if (!scopeSelected) {
+            return null;
+        }
+        if (scopeSelected.label === 'All Cells') {
+            return {}; // No filters
+        }
+        // Ask include or exclude
+        const filterTypeItems = [
+            {
+                label: 'Include Specific Cells',
+                description: `Only use these cells for ${phase.toLowerCase()}`,
+            },
+            {
+                label: 'Exclude Specific Cells',
+                description: `Use all except these cells for ${phase.toLowerCase()}`,
+            },
+        ];
+        const filterType = await ui.showQuickPick(filterTypeItems, {
+            title: `${phase} Filter Type`,
+            placeHolder: `Include or exclude cells for ${phase.toLowerCase()}?`,
+        });
+        if (!filterType) {
+            return null;
+        }
+        const isInclude = filterType.label.includes('Include');
+        const isInferenceInclude = phase === 'Inference' && isInclude;
+        // Discover all verses for the selector
+        const summary = await this.audioDiscoveryService.discoverAudio();
+        // For training, only show cells that have audio — cells without audio
+        // are irrelevant for training and just clutter the selector.
+        const relevantVerses = phase === 'Training'
+            ? summary.verses.filter(v => v.hasAudio)
+            : summary.verses;
+        const verseSelectorItems = relevantVerses.map(v => ({
+            cellId: v.cellId,
+            displayRef: v.verseRef || v.cellId,
+            hasAudio: v.hasAudio,
+        }));
+        // Show the interactive verse selector
+        const result = await ui.showVerseSelector(verseSelectorItems, {
+            phase,
+            selectionMode: isInclude ? 'include' : 'exclude',
+            showHideRecorded: isInferenceInclude,
+        });
+        if (!result) {
+            return null;
+        }
+        if (result.selectedIds.length === 0) {
+            // Nothing selected — treat as "all" (no filter)
+            return {};
+        }
+        return isInclude
+            ? { include: result.selectedIds }
+            : { exclude: result.selectedIds };
+    }
+    /**
+     * Step 6b: SentenceTransmorgrifier option (ASR training only)
+     * Returns: true (enabled), false (disabled), or undefined (canceled)
+     */
+    async selectTransmorgrifier(ui) {
+        const items = [
+            {
+                label: 'Enable SentenceTransmorgrifier',
+                description: 'Recommended — improves transcription quality',
+                detail: 'Post-processes ASR output to fix capitalization, punctuation, and formatting',
+            },
+            {
+                label: 'Disable SentenceTransmorgrifier',
+                description: 'Skip post-processing',
+                detail: 'Use raw ASR output without additional formatting',
+            },
+        ];
+        const selected = await ui.showQuickPick(items, {
+            title: 'SentenceTransmorgrifier',
+            placeHolder: 'Enable post-processing for ASR output?',
+        });
+        if (!selected) {
+            return undefined;
+        }
+        return selected.label.includes('Enable');
+    }
+    /**
+     * Step 6: Select voice reference (optional, TTS only)
+     */
+    async selectVoiceReference(ui) {
+        const items = [
+            {
+                label: 'Use Default Voice',
+                description: 'No specific voice reference',
+            },
+            {
+                label: 'Select Reference Audio',
+                description: 'Choose from recorded verses',
+            },
+        ];
+        const selected = await ui.showQuickPick(items, {
+            title: 'Voice Reference',
+            placeHolder: 'Use a specific voice reference?',
+        });
+        if (!selected) {
+            return undefined;
+        }
+        if (selected.label === 'Use Default Voice') {
+            return null;
+        }
+        // Get all verses with audio for the selector
+        const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+        const versesWithAudio = summary.verses.filter(v => v.hasAudio);
+        if (versesWithAudio.length === 0) {
+            vscode.window.showWarningMessage('No audio recordings found for reference selection.');
+            return null;
+        }
+        // Build selector items with local audio info
+        const selectorItems = versesWithAudio.map(v => {
+            let audioFilePath;
+            if (v.hasLocalAudio && v.audioPath && this.workspaceRoot) {
+                // Build absolute path to files/ folder for playback
+                audioFilePath = path.join(this.workspaceRoot, v.audioPath);
+            }
+            return {
+                cellId: v.cellId,
+                displayRef: v.verseRef || v.cellId,
+                hasAudio: v.hasAudio,
+                hasLocalAudio: v.hasLocalAudio,
+                audioFilePath,
+            };
+        });
+        // Show the audio reference selector
+        const selectedPath = await ui.showAudioReferenceSelector(selectorItems);
+        return selectedPath; // Returns pointer path, null (skipped), or undefined (canceled)
+    }
+    /**
+     * Step 7: Enter optional job name
+     * Returns: name string, null (skipped), or undefined (canceled)
+     */
+    async enterJobName(ui) {
+        const name = await ui.showInputBox({
+            title: 'Job Name (Optional)',
+            prompt: 'Give this job a name to identify it easily, or leave blank to skip',
+            value: '',
+            placeHolder: 'e.g., "Genesis Training Run 1"',
+        });
+        // undefined means the panel was closed / canceled
+        if (name === undefined) {
+            return undefined;
+        }
+        // Empty string means the user skipped
+        return name.trim() || null;
+    }
+    /**
+     * Step 8: Enter optional job description
+     * Returns: description string, null (skipped), or undefined (canceled)
+     */
+    async enterJobDescription(ui) {
+        const description = await ui.showInputBox({
+            title: 'Job Description (Optional)',
+            prompt: 'Add a description for this job, or leave blank to skip',
+            value: '',
+            placeHolder: 'e.g., "Training on Genesis chapters 1-3 with default voice"',
+        });
+        // undefined means the panel was closed / canceled
+        if (description === undefined) {
+            return undefined;
+        }
+        // Empty string means the user skipped
+        return description.trim() || null;
+    }
+    // ================================================================
+    // Preflight & confirmation helpers
+    // ================================================================
+    /**
+     * Run preflight checks (delegates to PreflightService via extension.ts)
+     * For now, we do a lightweight version here.
+     */
+    async runPreflightChecks(params) {
+        // We'll do a basic check here. The full preflight is done in extension.ts
+        // before actual job submission.
+        const errors = [];
+        const warnings = [];
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio({ validateFiles: true });
+            const totalPairs = summary.totalVerses;
+            const missingRecordings = summary.versesWithoutAudio;
+            const coveragePercentage = totalPairs > 0
+                ? (summary.versesWithAudio / totalPairs) * 100
+                : 0;
+            // Training checks
+            if (params.mode === 'training' || params.mode === 'training_and_inference') {
+                if (summary.versesWithAudio === 0) {
+                    errors.push('No audio recordings found. Training requires audio data.');
+                }
+                else if (summary.versesWithAudio < 50) {
+                    warnings.push(`Only ${summary.versesWithAudio} audio recordings found. ` +
+                        `Recommended minimum: 50 for quality training.`);
+                }
+            }
+            // Inference requires checkpoint
+            if (params.mode === 'inference' && !params.baseCheckpoint) {
+                errors.push('Inference mode requires a base checkpoint.');
+            }
+            // Training requires epochs
+            if ((params.mode === 'training' || params.mode === 'training_and_inference') && !params.epochs) {
+                errors.push('Training mode requires epoch count.');
+            }
+            // Check for queued jobs
+            const jobs = await this.manifestService.getJobsWithState();
+            const pendingJobs = jobs.filter(j => j.state === 'pending');
+            const runningJobs = jobs.filter(j => j.state === 'running');
+            if (pendingJobs.length > 0 || runningJobs.length > 0) {
+                const total = pendingJobs.length + runningJobs.length;
+                warnings.push(`${total} job(s) already in the queue. New job will be queued after existing jobs.`);
+            }
+            return {
+                passed: errors.length === 0,
+                errors,
+                warnings,
+                audioStats: { totalPairs, missingRecordings, coveragePercentage },
+            };
+        }
+        catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            errors.push(`Failed to analyze audio data: ${msg}`);
+            return {
+                passed: false,
+                errors,
+                warnings,
+                audioStats: { totalPairs: 0, missingRecordings: 0, coveragePercentage: 0 },
+            };
+        }
+    }
+    /**
+     * Get total verse count for confirmation display
+     */
+    async getTotalVerseCount() {
+        try {
+            const summary = await this.audioDiscoveryService.discoverAudio();
+            return summary.totalVerses;
+        }
+        catch {
+            return 0;
+        }
+    }
+    /**
+     * Build the confirmation page data from job params and preflight results
+     */
+    buildConfirmationData(params, preflight, totalVerses) {
+        const data = {
+            jobType: params.jobType,
+            name: params.name,
+            description: params.description,
+            mode: params.mode,
+            modelType: params.modelType,
+            baseCheckpoint: params.baseCheckpoint,
+            epochs: params.epochs,
+            voiceReference: params.voiceReference,
+            transmorgrifierEnabled: params.transmorgrifierEnabled,
+            audioStats: preflight.audioStats,
+            warnings: preflight.warnings,
+            errors: preflight.errors,
+        };
+        // Training selection summary
+        if (params.mode === 'training' || params.mode === 'training_and_inference') {
+            if (params.trainingIncludeVerses && params.trainingIncludeVerses.length > 0) {
+                data.trainingSelection = {
+                    type: 'include',
+                    count: params.trainingIncludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else if (params.trainingExcludeVerses && params.trainingExcludeVerses.length > 0) {
+                data.trainingSelection = {
+                    type: 'exclude',
+                    count: params.trainingExcludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else {
+                data.trainingSelection = {
+                    type: 'all',
+                    totalCount: totalVerses,
+                };
+            }
+        }
+        // Inference selection summary
+        if (params.mode === 'inference' || params.mode === 'training_and_inference') {
+            if (params.inferenceIncludeVerses && params.inferenceIncludeVerses.length > 0) {
+                data.inferenceSelection = {
+                    type: 'include',
+                    count: params.inferenceIncludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else if (params.inferenceExcludeVerses && params.inferenceExcludeVerses.length > 0) {
+                data.inferenceSelection = {
+                    type: 'exclude',
+                    count: params.inferenceExcludeVerses.length,
+                    totalCount: totalVerses,
+                };
+            }
+            else {
+                data.inferenceSelection = {
+                    type: 'all',
+                    totalCount: totalVerses,
+                };
+            }
+        }
+        return data;
+    }
+    /**
+     * Show confirmation dialog with job details and preflight checks.
+     * This is the legacy method kept for backwards compatibility with extension.ts.
+     * The new flow uses the webview confirmation page instead.
+     */
+    async showConfirmation(params, preflightResult) {
+        // This method is no longer used in the new webview flow.
+        // The confirmation is handled inside run() via ui.showConfirmation().
+        // Kept for API compatibility in case it's called externally.
+        const lines = [];
+        lines.push('**Job Configuration:**');
+        lines.push(`- Mode: ${params.mode}`);
+        lines.push(`- Model: ${params.modelType}`);
+        if (params.baseCheckpoint) {
+            lines.push(`- Base Checkpoint: ${params.baseCheckpoint}`);
+        }
+        if (params.epochs) {
+            lines.push(`- Epochs: ${params.epochs}`);
+        }
+        lines.push('');
+        lines.push('**Audio Data:**');
+        lines.push(`- Total Pairs: ${preflightResult.audioStats.totalPairs}`);
+        lines.push(`- Missing Recordings: ${preflightResult.audioStats.missingRecordings}`);
+        lines.push(`- Coverage: ${preflightResult.audioStats.coveragePercentage.toFixed(1)}%`);
+        if (preflightResult.warnings.length > 0) {
+            lines.push('');
+            lines.push('**⚠️ Warnings:**');
+            preflightResult.warnings.forEach(w => lines.push(`- ${w}`));
+        }
+        if (preflightResult.errors.length > 0) {
+            lines.push('');
+            lines.push('**❌ Errors:**');
+            preflightResult.errors.forEach(e => lines.push(`- ${e}`));
+        }
+        const message = lines.join('\n');
+        if (!preflightResult.passed) {
+            await vscode.window.showErrorMessage('Cannot submit job due to validation errors:\n\n' + message, { modal: true });
+            return false;
+        }
+        const action = await vscode.window.showInformationMessage(message, { modal: true }, 'Submit Job', 'Cancel');
+        return action === 'Submit Job';
+    }
+}
+exports.NewJobWizard = NewJobWizard;
+
+
+/***/ }),
+/* 36 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * WebviewUI — Task/Response wrapper for VS Code Webview panels.
+ *
+ * Provides an API backwards-compatible with vscode.window.showQuickPick / showInputBox
+ * but renders inside a webview panel. Also exposes rich task types like showVerseSelector.
+ *
+ * The extension always drives the control flow via sequential `await` calls.
+ * The webview is a stateless render-and-respond terminal.
+ * Panel close at any point resolves the pending promise to undefined/null (cancel).
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.WebviewUI = void 0;
+const vscode = __importStar(__webpack_require__(1));
+const path = __importStar(__webpack_require__(4));
+/**
+ * Manages a webview panel and provides an await-based task/response API.
+ */
+class WebviewUI {
+    extensionUri;
+    workspaceRoot;
+    panelTitle;
+    panel;
+    disposed = false;
+    taskCounter = 0;
+    pendingResolve = null;
+    pendingTaskId = null;
+    messageDisposable = null;
+    constructor(extensionUri, workspaceRoot, panelTitle = 'New GPU Job') {
+        this.extensionUri = extensionUri;
+        this.workspaceRoot = workspaceRoot;
+        this.panelTitle = panelTitle;
+        this.panel = vscode.window.createWebviewPanel('codexWorkerPanel', this.panelTitle, vscode.ViewColumn.One, {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(extensionUri, 'media'),
+                // Allow access to project attachments for audio playback
+                ...(workspaceRoot ? [vscode.Uri.file(path.join(workspaceRoot, '.project', 'attachments'))] : []),
+            ],
+        });
+        // Set the HTML content
+        this.panel.webview.html = this.getHtmlContent();
+        // Handle panel disposal (user closes the tab)
+        this.panel.onDidDispose(() => {
+            this.disposed = true;
+            if (this.pendingResolve) {
+                this.pendingResolve(undefined);
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+            }
+            if (this.messageDisposable) {
+                this.messageDisposable.dispose();
+                this.messageDisposable = null;
+            }
+        });
+        // Set up message listener
+        this.messageDisposable = this.panel.webview.onDidReceiveMessage((msg) => {
+            // Handle audio URI requests (non-task messages)
+            if (msg.type === 'get-audio-uri' && msg.filePath) {
+                const fileUri = vscode.Uri.file(msg.filePath);
+                const webviewUri = this.panel.webview.asWebviewUri(fileUri);
+                this.panel.webview.postMessage({
+                    type: 'audio-uri',
+                    uri: webviewUri.toString(),
+                    requestId: msg.requestId,
+                });
+                return;
+            }
+            // Handle privacy policy view request (non-task message — does not resolve pending task)
+            if (msg.type === 'open-privacy-policy') {
+                vscode.commands.executeCommand('codex-worker.viewPrivacyPolicy');
+                return;
+            }
+            if (!this.pendingResolve || !this.pendingTaskId) {
+                return;
+            }
+            if (msg.type === 'response' && msg.taskId === this.pendingTaskId) {
+                const resolve = this.pendingResolve;
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+                resolve(msg.result);
+            }
+            else if (msg.type === 'cancel' && msg.taskId === this.pendingTaskId) {
+                const resolve = this.pendingResolve;
+                this.pendingResolve = null;
+                this.pendingTaskId = null;
+                resolve(undefined);
+            }
+        });
+    }
+    /**
+     * Whether the panel has been disposed (closed by user or programmatically)
+     */
+    get isDisposed() {
+        return this.disposed;
+    }
+    /**
+     * Dispose the panel
+     */
+    dispose() {
+        if (!this.disposed) {
+            this.panel.dispose();
+        }
+    }
+    /**
+     * Send a task to the webview and wait for the response.
+     * Returns undefined if the panel is closed before a response.
+     */
+    async askWebview(taskPayload) {
+        if (this.disposed) {
+            return undefined;
+        }
+        const taskId = `task_${++this.taskCounter}`;
+        const fullTask = { type: 'task', taskId, ...taskPayload };
+        return new Promise((resolve) => {
+            this.pendingResolve = resolve;
+            this.pendingTaskId = taskId;
+            this.panel.webview.postMessage(fullTask);
+        });
+    }
+    // ================================================================
+    // Backwards-compatible API (mirrors vscode.window.showQuickPick / showInputBox)
+    // ================================================================
+    /**
+     * Show a QuickPick-like selection in the webview.
+     * API shape mirrors vscode.window.showQuickPick for easy migration.
+     */
+    async showQuickPick(items, options) {
+        return this.askWebview({
+            taskType: 'quickpick',
+            items,
+            title: options?.title,
+            placeHolder: options?.placeHolder,
+        });
+    }
+    /**
+     * Show an InputBox-like text input in the webview.
+     * API shape mirrors vscode.window.showInputBox for easy migration.
+     *
+     * Note: validateInput callbacks can't be sent to the webview, so we use
+     * validationRegex + validationMessage for simple validation, or skip it.
+     */
+    async showInputBox(options) {
+        return this.askWebview({
+            taskType: 'inputbox',
+            title: options?.title,
+            prompt: options?.prompt,
+            value: options?.value,
+            placeHolder: options?.placeHolder,
+            validationRegex: options?.validationRegex,
+            validationMessage: options?.validationMessage,
+        });
+    }
+    // ================================================================
+    // Rich task types (no native equivalent)
+    // ================================================================
+    /**
+     * Show the interactive verse selector.
+     * Returns the selected cell IDs, or undefined if canceled.
+     */
+    async showVerseSelector(verses, options) {
+        return this.askWebview({
+            taskType: 'verse-selector',
+            verses,
+            phase: options.phase,
+            selectionMode: options.selectionMode,
+            showHideRecorded: options.showHideRecorded,
+            showPlayButton: options.showPlayButton,
+            allowSkip: options.allowSkip,
+        });
+    }
+    /**
+     * Show the audio reference selector.
+     * Returns the selected audio path (pointers/ path for GPU worker),
+     * null if skipped, or undefined if canceled.
+     */
+    async showAudioReferenceSelector(verses) {
+        const result = await this.askWebview({
+            taskType: 'verse-selector',
+            verses,
+            phase: 'Reference Audio',
+            selectionMode: 'single-audio',
+            showHideRecorded: false,
+            showPlayButton: true,
+            allowSkip: true,
+        });
+        if (!result) {
+            return undefined; // Canceled
+        }
+        if (result.selectedIds.length === 0) {
+            return null; // Skipped
+        }
+        return result.selectedAudioPath || null;
+    }
+    /**
+     * Show the confirmation/review page.
+     * Returns 'submit', 'start-over', or undefined (canceled/closed).
+     * Note: "View full privacy policy" is handled as a non-task message
+     * (open-privacy-policy) so it doesn't resolve the pending task.
+     */
+    async showConfirmation(data) {
+        return this.askWebview({
+            taskType: 'confirmation',
+            data,
+        });
+    }
+    /**
+     * Show the job detail view with action buttons.
+     * Returns the action the user clicked, or undefined if the panel was closed.
+     */
+    async showJobDetail(data) {
+        return this.askWebview({
+            taskType: 'job-detail',
+            data,
+        });
+    }
+    // ================================================================
+    // HTML generation
+    // ================================================================
+    /**
+     * Generate the webview HTML content.
+     * Loads the external JS and CSS files from the webview directory.
+     */
+    getHtmlContent() {
+        const webview = this.panel.webview;
+        // Get URIs for webview resources
+        const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'wizard.css'));
+        const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'wizard.js'));
+        const nonce = getNonce();
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};">
+    <link href="${cssUri}" rel="stylesheet">
+    <title>New GPU Job</title>
+</head>
+<body>
+    <div id="wizard-root"></div>
+    <script nonce="${nonce}" src="${jsUri}"></script>
+</body>
+</html>`;
+    }
+}
+exports.WebviewUI = WebviewUI;
+/**
+ * Generate a random nonce for Content Security Policy
+ */
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+
+
+/***/ }),
+/* 37 */
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * Privacy policy constants.
+ *
+ * The authoritative privacy policy lives in PRIVACY.md at the project root.
+ * This file contains only the short summary shown on the job confirmation page.
+ *
+ * If you update PRIVACY.md, review this summary to ensure consistency.
+ * If you update this summary, review PRIVACY.md to ensure consistency.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PRIVACY_SUMMARY = exports.PRIVACY_CONSENT_KEY = exports.PRIVACY_POLICY_VERSION = void 0;
+/** Current privacy policy version. Bump when the policy changes materially. */
+exports.PRIVACY_POLICY_VERSION = 1;
+/**
+ * globalState key used to store the version the user last consented to.
+ * Value is a number matching PRIVACY_POLICY_VERSION, or undefined if never consented.
+ */
+exports.PRIVACY_CONSENT_KEY = 'codex-worker.privacyConsentVersion';
+/**
+ * Short summary shown on the job confirmation page.
+ * Keep this concise — the full policy is in PRIVACY.md.
+ */
+exports.PRIVACY_SUMMARY = [
+    'Your project data will be temporarily shared with a remote GPU processing server to execute this job.',
+    'Results will be uploaded back to your project. The server\u2019s access is automatically revoked after job completion (~24 hr), and residual server data is purged after a limited maintenance window.',
+    'Your data is never used for other projects without your explicit permission.',
+].join(' ');
+
+
+/***/ }),
+/* 38 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+/**
+ * Job Detail Panel — shows detailed information about a job with action buttons.
+ *
+ * Follows the same extension-driven, webview-passive pattern as NewJobWizard:
+ * the extension sends a single 'job-detail' task to the webview, awaits the
+ * user's action choice, handles it, and closes the panel.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.JobDetailPanel = void 0;
+const vscode = __importStar(__webpack_require__(1));
+const fs = __importStar(__webpack_require__(3));
+const path = __importStar(__webpack_require__(4));
+const yaml = __importStar(__webpack_require__(6));
+const WebviewUI_1 = __webpack_require__(36);
+/**
+ * Orchestrator for the job detail panel.
+ * Opens a webview showing job details and action buttons, handles the selected action.
+ */
+class JobDetailPanel {
+    manifestService;
+    extensionUri;
+    workspaceRoot;
+    /** The active WebviewUI instance, tracked so it can be disposed externally */
+    ui = null;
+    constructor(manifestService, extensionUri) {
+        this.manifestService = manifestService;
+        this.extensionUri = extensionUri;
+        this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    }
+    /**
+     * Dispose the panel externally. This causes the pending showJobDetail()
+     * promise to resolve to undefined, allowing the run() method to exit cleanly.
+     */
+    dispose() {
+        if (this.ui) {
+            this.ui.dispose();
+            this.ui = null;
+        }
+    }
+    /**
+     * Show the job detail panel and handle the user's action.
+     * Returns a JobDetailResult if an action was taken that the caller needs
+     * to follow up on (further-train, run-inference), or null if the panel
+     * was closed without a follow-up action.
+     */
+    async run(job) {
+        const panelLabel = job.name || job.job_id;
+        this.ui = new WebviewUI_1.WebviewUI(this.extensionUri, this.workspaceRoot, `Job: ${panelLabel}`);
+        try {
+            const actions = this.computeAvailableActions(job);
+            const detailData = this.buildDetailData(job, actions);
+            const action = await this.ui.showJobDetail(detailData);
+            if (!action) {
+                // Panel was closed without selecting an action
+                return null;
+            }
+            // Handle the action
+            return await this.handleAction(action, job);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Job detail error: ${errorMessage}`);
+            return null;
+        }
+        finally {
+            if (this.ui) {
+                this.ui.dispose();
+                this.ui = null;
+            }
+        }
+    }
+    /**
+     * Determine which actions are available based on the job's current state and mode.
+     */
+    computeAvailableActions(job) {
+        const actions = [];
+        // Cancel: only for pending or running jobs
+        if (job.state === 'pending' || job.state === 'running') {
+            actions.push('cancel-job');
+        }
+        // Delete: always available
+        actions.push('delete-job');
+        // Further Train: available on completed jobs (uses produced checkpoint)
+        // or inference jobs (uses the base_checkpoint they referenced)
+        if (job.state === 'completed') {
+            const checkpoint = this.resolveCheckpointForTraining(job);
+            if (checkpoint) {
+                actions.push('further-train');
+            }
+        }
+        // Run Inference: available on completed training jobs that produced a checkpoint
+        if (job.state === 'completed' &&
+            (job.mode === 'training' || job.mode === 'training_and_inference')) {
+            const checkpoint = this.getProducedCheckpoint(job.job_id);
+            if (checkpoint) {
+                actions.push('run-inference');
+            }
+        }
+        // Clone Job: available on completed or failed jobs (re-submit with same params)
+        if (job.state === 'completed' || job.state === 'failed' || job.state === 'canceled') {
+            actions.push('clone-job');
+        }
+        // Open Job Folder: available when the job folder exists on disk
+        const jobFolderPath = this.getJobFolderPath(job.job_id);
+        if (jobFolderPath && fs.existsSync(jobFolderPath)) {
+            // View Logs: only if logs.txt exists in the job folder
+            const logsPath = path.join(jobFolderPath, 'logs.txt');
+            if (fs.existsSync(logsPath)) {
+                actions.push('view-logs');
+            }
+            actions.push('open-job-folder');
+        }
+        return actions;
+    }
+    /**
+     * Build the detail data payload to send to the webview.
+     */
+    buildDetailData(job, availableActions) {
+        const jobFolderPath = this.getJobFolderPath(job.job_id);
+        return {
+            jobId: job.job_id,
+            name: job.name,
+            description: job.description,
+            jobType: job.job_type,
+            mode: job.mode,
+            state: job.state,
+            modelType: job.model.type,
+            baseCheckpoint: job.model.base_checkpoint,
+            epochs: job.epochs,
+            epochsCompleted: job.epochs_completed,
+            workerId: job.worker_id,
+            submittedAt: job.submitted_at,
+            responseTimestamp: job.response_timestamp,
+            errorMessage: job.error_message,
+            canceled: job.canceled ?? false,
+            trainingVerseCount: this.countVerses(job.training?.include_verses, job.training?.exclude_verses),
+            inferenceVerseCount: this.countVerses(job.inference?.include_verses, job.inference?.exclude_verses),
+            voiceReference: job.voice_reference,
+            hasJobFolder: !!(jobFolderPath && fs.existsSync(jobFolderPath)),
+            availableActions,
+            trainingMetrics: this.parseTrainingMetrics(job.job_id),
+        };
+    }
+    /**
+     * Count verses for display (returns the include count, exclude count, or undefined for "all").
+     */
+    countVerses(include, exclude) {
+        if (include && include.length > 0) {
+            return include.length;
+        }
+        if (exclude && exclude.length > 0) {
+            return exclude.length;
+        }
+        return undefined;
+    }
+    /**
+     * Handle the user's selected action.
+     * Returns a JobDetailResult for actions that need follow-up, or null for terminal actions.
+     */
+    async handleAction(action, job) {
+        switch (action) {
+            case 'cancel-job': {
+                await this.manifestService.cancelJob(job.job_id);
+                vscode.window.showInformationMessage(`Job ${job.job_id} has been canceled.`);
+                return null; // Close panel, no follow-up needed
+            }
+            case 'delete-job': {
+                const confirm = await vscode.window.showWarningMessage(`Delete job ${job.job_id}?\n\n` +
+                    'This will permanently delete:\n' +
+                    '• The trained model checkpoint\n' +
+                    '• All job output files and logs\n' +
+                    '• The job entry from the manifest\n\n' +
+                    'You will not be able to generate audio from this model ' +
+                    'without recovering it from version control.', { modal: true }, 'Delete', 'Cancel');
+                if (confirm === 'Delete') {
+                    // Delete the job folder first (model files, logs, etc.)
+                    await this.manifestService.deleteJobFolder(job.job_id);
+                    // Then remove from manifest
+                    await this.manifestService.removeJob(job.job_id);
+                    vscode.window.showInformationMessage(`Job ${job.job_id} has been deleted.`);
+                }
+                return null; // Close panel, no follow-up needed
+            }
+            case 'further-train': {
+                const checkpointPath = this.resolveCheckpointForTraining(job);
+                return {
+                    action: 'further-train',
+                    job,
+                    checkpointPath: checkpointPath || undefined,
+                };
+            }
+            case 'run-inference': {
+                const checkpointPath = this.getProducedCheckpoint(job.job_id);
+                return {
+                    action: 'run-inference',
+                    job,
+                    checkpointPath: checkpointPath || undefined,
+                };
+            }
+            case 'clone-job': {
+                // Return the action so extension.ts can launch the wizard pre-filled
+                // with the same parameters as this job
+                return {
+                    action: 'clone-job',
+                    job,
+                };
+            }
+            case 'view-logs': {
+                // Open the logs.txt file in the editor
+                const jobFolderPath = this.getJobFolderPath(job.job_id);
+                if (jobFolderPath) {
+                    const logsPath = path.join(jobFolderPath, 'logs.txt');
+                    if (fs.existsSync(logsPath)) {
+                        const doc = await vscode.workspace.openTextDocument(logsPath);
+                        await vscode.window.showTextDocument(doc, { preview: true });
+                    }
+                    else {
+                        vscode.window.showWarningMessage('No logs file found for this job.');
+                    }
+                }
+                return null;
+            }
+            case 'open-job-folder': {
+                // Reveal the job folder in the file explorer
+                const jobFolderPath = this.getJobFolderPath(job.job_id);
+                if (jobFolderPath && fs.existsSync(jobFolderPath)) {
+                    const folderUri = vscode.Uri.file(jobFolderPath);
+                    await vscode.commands.executeCommand('revealInExplorer', folderUri);
+                }
+                else {
+                    vscode.window.showWarningMessage('Job folder not found on disk.');
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+    /**
+     * Resolve the checkpoint path to use for "Further Train" action.
+     * - For training/training_and_inference jobs: uses the produced checkpoint
+     * - For inference jobs: uses the base_checkpoint they were referencing
+     */
+    resolveCheckpointForTraining(job) {
+        if (job.mode === 'training' || job.mode === 'training_and_inference') {
+            return this.getProducedCheckpoint(job.job_id);
+        }
+        if (job.mode === 'inference') {
+            return job.model.base_checkpoint ?? null;
+        }
+        return null;
+    }
+    /**
+     * Parse the training_metrics.csv file for a job, if it exists.
+     * Returns undefined if the file doesn't exist or has no valid data.
+     *
+     * Resilience rules:
+     * - Missing file → undefined (no graph shown)
+     * - Empty file or no data rows → undefined
+     * - Missing columns → only include columns that exist
+     * - Non-numeric values → skip that cell
+     */
+    parseTrainingMetrics(jobId) {
+        const jobFolderPath = this.getJobFolderPath(jobId);
+        if (!jobFolderPath) {
+            return undefined;
+        }
+        const csvPath = path.join(jobFolderPath, 'checkpoint', 'training_metrics.csv');
+        if (!fs.existsSync(csvPath)) {
+            return undefined;
+        }
+        try {
+            const content = fs.readFileSync(csvPath, 'utf8').trim();
+            if (!content) {
+                return undefined;
+            }
+            const lines = content.split(/\r?\n/);
+            if (lines.length < 2) {
+                // Need at least a header row and one data row
+                return undefined;
+            }
+            const headers = lines[0].split(',').map(h => h.trim());
+            const epochIndex = headers.indexOf('epoch');
+            // Identify numeric data columns (everything except 'epoch')
+            const dataColumns = headers.filter(h => h !== 'epoch' && h.length > 0);
+            if (dataColumns.length === 0) {
+                return undefined;
+            }
+            const epochs = [];
+            const series = {};
+            for (const col of dataColumns) {
+                series[col] = [];
+            }
+            // Parse data rows
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    continue;
+                }
+                const values = line.split(',').map(v => v.trim());
+                // Parse epoch number
+                let epoch;
+                if (epochIndex >= 0 && epochIndex < values.length) {
+                    epoch = parseFloat(values[epochIndex]);
+                    if (isNaN(epoch)) {
+                        continue; // Skip rows with invalid epoch
+                    }
+                }
+                else {
+                    // No epoch column — use row index as epoch
+                    epoch = i - 1;
+                }
+                epochs.push(epoch);
+                // Parse each data column
+                for (const col of dataColumns) {
+                    const colIndex = headers.indexOf(col);
+                    if (colIndex >= 0 && colIndex < values.length) {
+                        const val = parseFloat(values[colIndex]);
+                        series[col].push(isNaN(val) ? NaN : val);
+                    }
+                    else {
+                        series[col].push(NaN);
+                    }
+                }
+            }
+            if (epochs.length === 0) {
+                return undefined;
+            }
+            // Filter out columns that are entirely NaN
+            const validColumns = dataColumns.filter(col => series[col].some(v => !isNaN(v)));
+            if (validColumns.length === 0) {
+                return undefined;
+            }
+            // Remove invalid columns from series
+            const validSeries = {};
+            for (const col of validColumns) {
+                validSeries[col] = series[col];
+            }
+            const hasPrimaryColumns = validColumns.includes('train_total_loss') &&
+                validColumns.includes('val_total_loss');
+            return {
+                columns: validColumns,
+                epochs,
+                series: validSeries,
+                hasPrimaryColumns,
+            };
+        }
+        catch {
+            return undefined;
+        }
+    }
+    /**
+     * Get the absolute path to a job's folder on disk.
+     * Returns null if no workspace root is available.
+     */
+    getJobFolderPath(jobId) {
+        if (!this.workspaceRoot) {
+            return null;
+        }
+        return path.join(this.workspaceRoot, 'gpu_jobs', `job_${jobId}`);
+    }
+    /**
+     * Read the checkpoint path produced by a completed job from its response.yaml.
+     * Returns null if the job hasn't produced a checkpoint or the file doesn't exist.
+     */
+    getProducedCheckpoint(jobId) {
+        if (!this.workspaceRoot) {
+            return null;
+        }
+        const responsePath = path.join(this.workspaceRoot, 'gpu_jobs', `job_${jobId}`, 'response.yaml');
+        if (!fs.existsSync(responsePath)) {
+            return null;
+        }
+        try {
+            const content = fs.readFileSync(responsePath, 'utf8');
+            const response = yaml.load(content);
+            if (response.state !== 'completed' || !response.result?.checkpoint_path) {
+                return null;
+            }
+            // Verify the checkpoint file actually exists
+            const absolutePath = path.resolve(this.workspaceRoot, response.result.checkpoint_path);
+            if (!fs.existsSync(absolutePath)) {
+                return null;
+            }
+            return response.result.checkpoint_path;
+        }
+        catch {
+            return null;
+        }
+    }
+}
+exports.JobDetailPanel = JobDetailPanel;
+
+
+/***/ })
+/******/ 	]);
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/************************************************************************/
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __webpack_require__(0);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
+/******/ })()
+;
+//# sourceMappingURL=extension.js.map

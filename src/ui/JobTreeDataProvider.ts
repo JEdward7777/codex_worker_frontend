@@ -125,8 +125,9 @@ export class JobTreeItem extends vscode.TreeItem {
             parts.push(`${progress}/${this.job.epochs} epochs`);
         }
 
-        // Mode
-        parts.push(this.job.mode);
+        // Job type prefix + mode (e.g., "TTS-inference", "ASR-training")
+        const typeLabel = this.job.job_type.toUpperCase();
+        parts.push(`${typeLabel}-${this.job.mode}`);
 
         return parts.join(' • ');
     }
@@ -143,13 +144,22 @@ export class JobTreeItem extends vscode.TreeItem {
     }
 
     private getIconForState(state: string): vscode.ThemeIcon {
+        // Use job-type-specific icons for non-terminal states
+        const isASR = this.job.job_type === 'asr';
+
         switch (state) {
             case 'pending':
-                return new vscode.ThemeIcon('clock', new vscode.ThemeColor('charts.yellow'));
+                return new vscode.ThemeIcon(
+                    isASR ? 'mic' : 'megaphone',
+                    new vscode.ThemeColor('charts.yellow')
+                );
             case 'running':
                 return new vscode.ThemeIcon('play', new vscode.ThemeColor('charts.blue'));
             case 'completed':
-                return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+                return new vscode.ThemeIcon(
+                    isASR ? 'mic' : 'megaphone',
+                    new vscode.ThemeColor('charts.green')
+                );
             case 'failed':
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
             case 'canceled':
