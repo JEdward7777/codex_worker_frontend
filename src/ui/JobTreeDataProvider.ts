@@ -113,9 +113,9 @@ export class JobTreeItem extends vscode.TreeItem {
         // State indicator
         parts.push(this.getStateEmoji(this.job.state));
 
-        // Worker name if claimed
-        if (this.job.worker_id) {
-            parts.push(`Worker: ${this.job.worker_id}`);
+        // Job creation date
+        if (this.job.submitted_at) {
+            parts.push(JobTreeItem.formatTimestamp(this.job.submitted_at));
         }
 
         // Epoch progress if available
