@@ -9,7 +9,7 @@
  */
 
 /** Current privacy policy version. Bump when the policy changes materially. */
-export const PRIVACY_POLICY_VERSION = 1;
+export const PRIVACY_POLICY_VERSION = 2;
 
 /**
  * globalState key used to store the version the user last consented to.

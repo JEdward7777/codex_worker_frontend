@@ -136,35 +136,31 @@ export class JobTreeItem extends vscode.TreeItem {
             case 'pending': return '⏳';
             case 'running': return '▶️';
             case 'completed': return '✅';
-            case 'failed': return '❌';
+            case 'failed': return '🔴 FAILED';
             case 'canceled': return '🚫';
             default: return '❓';
         }
     }
 
     private getIconForState(state: string): vscode.ThemeIcon {
-        // Use job-type-specific icons for non-terminal states
+        // Always use job-type icon (mic for ASR, megaphone for TTS)
+        // Color varies by state to indicate status
         const isASR = this.job.job_type === 'asr';
+        const iconName = isASR ? 'mic' : 'megaphone';
 
         switch (state) {
             case 'pending':
-                return new vscode.ThemeIcon(
-                    isASR ? 'mic' : 'megaphone',
-                    new vscode.ThemeColor('charts.yellow')
-                );
+                return new vscode.ThemeIcon(iconName, new vscode.ThemeColor('charts.yellow'));
             case 'running':
-                return new vscode.ThemeIcon('play', new vscode.ThemeColor('charts.blue'));
+                return new vscode.ThemeIcon(iconName, new vscode.ThemeColor('charts.blue'));
             case 'completed':
-                return new vscode.ThemeIcon(
-                    isASR ? 'mic' : 'megaphone',
-                    new vscode.ThemeColor('charts.green')
-                );
+                return new vscode.ThemeIcon(iconName, new vscode.ThemeColor('charts.green'));
             case 'failed':
-                return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+                return new vscode.ThemeIcon(iconName, new vscode.ThemeColor('charts.red'));
             case 'canceled':
-                return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.gray'));
+                return new vscode.ThemeIcon(iconName, new vscode.ThemeColor('charts.gray'));
             default:
-                return new vscode.ThemeIcon('question');
+                return new vscode.ThemeIcon(iconName);
         }
     }
 

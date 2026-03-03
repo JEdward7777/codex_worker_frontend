@@ -1,7 +1,7 @@
 # Codex Worker — Data Privacy Policy
 
-**Policy Version:** 1
-**Last Updated:** 2026-02-27
+**Policy Version:** 2
+**Last Updated:** 2026-03-03
 
 ## Overview
 
@@ -34,11 +34,19 @@ Only data relevant to the submitted job is accessed by the processing server.
 - **Processing server:** Project data is not permanently stored. Residual data may remain for a limited maintenance window after job completion but is eventually purged.
 - **No permanent server-side copies:** The processing server does not retain long-term copies of your project data.
 
+## Metadata and Logs
+
+The service infrastructure generates operational metadata as a byproduct of job execution:
+
+- **Service logs:** The job orchestration infrastructure maintains operational logs that may include job identifiers, timestamps, and diagnostic details. These logs do not typically contain project content.
+
+- **GitLab activity records:** The GPU worker service account's interactions with your project (such as commits and membership events) are recorded by GitLab as part of its normal operation. Commits authored by the worker persist in your project history as part of how results are delivered. The worker account's own activity history on GitLab may also retain a record of these interactions independently of project membership, subject to the GitLab instance's data retention policies.
+
 ## What We Do NOT Do
 
 - ❌ **No secondary use:** Your data is never used to train models for other projects or users without your explicit permission.
 - ❌ **No third-party sharing:** Your data is not shared with any parties beyond the processing infrastructure required to execute your job.
-- ❌ **No permanent retention:** Project data is not permanently stored on processing servers.
+- ❌ **No permanent bulk data retention:** Your project's content data (audio, text, models) is not permanently stored on processing servers. Operational metadata and activity records may be retained separately as described above.
 
 ## Future Considerations
 
