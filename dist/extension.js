@@ -6130,22 +6130,11 @@ class JobTreeDataProvider {
             if (jobs.length === 0) {
                 return [];
             }
-            // Sort jobs: running first, then pending, then completed/failed/canceled
+            // Sort jobs by creation time (oldest first)
             const sortedJobs = jobs.sort((a, b) => {
-                const stateOrder = {
-                    'running': 0,
-                    'pending': 1,
-                    'completed': 2,
-                    'failed': 3,
-                    'canceled': 4
-                };
-                const orderA = stateOrder[a.state] ?? 5;
-                const orderB = stateOrder[b.state] ?? 5;
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-                // Within same state, sort by job_id (newest first)
-                return b.job_id.localeCompare(a.job_id);
+                const timeA = new Date(a.submitted_at).getTime();
+                const timeB = new Date(b.submitted_at).getTime();
+                return timeA - timeB;
             });
             return sortedJobs.map((job) => new JobTreeItem(job, vscode.TreeItemCollapsibleState.None));
         }

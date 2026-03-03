@@ -3,8 +3,7 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { JobWithState, JobState } from '../types/manifest';
+import { JobWithState } from '../types/manifest';
 import { ManifestService } from '../services/ManifestService';
 
 /**
@@ -242,25 +241,11 @@ export class JobTreeDataProvider implements vscode.TreeDataProvider<JobTreeItem>
                 return [];
             }
 
-            // Sort jobs: running first, then pending, then completed/failed/canceled
+            // Sort jobs by creation time (oldest first)
             const sortedJobs = jobs.sort((a: JobWithState, b: JobWithState) => {
-                const stateOrder: Record<JobState, number> = {
-                    'running': 0,
-                    'pending': 1,
-                    'completed': 2,
-                    'failed': 3,
-                    'canceled': 4
-                };
-
-                const orderA = stateOrder[a.state] ?? 5;
-                const orderB = stateOrder[b.state] ?? 5;
-
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-
-                // Within same state, sort by job_id (newest first)
-                return b.job_id.localeCompare(a.job_id);
+                const timeA = new Date(a.submitted_at).getTime();
+                const timeB = new Date(b.submitted_at).getTime();
+                return timeA - timeB;
             });
 
             return sortedJobs.map((job: JobWithState) =>
