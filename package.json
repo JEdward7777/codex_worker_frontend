@@ -48,6 +48,10 @@
         "title": "GPU Jobs: Test GitLab Connection"
       },
       {
+        "command": "codex-worker.shareProjectWithWorker",
+        "title": "GPU Jobs: Share Project with Worker"
+      },
+      {
         "command": "codex-worker.testManifestGeneration",
         "title": "GPU Jobs: Test Manifest Generation"
       },

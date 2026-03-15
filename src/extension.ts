@@ -106,6 +106,39 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register share project with worker command
+	const shareProjectDisposable = vscode.commands.registerCommand('codex-worker.shareProjectWithWorker', async () => {
+		try {
+			vscode.window.showInformationMessage('Sharing project with GPU worker...');
+
+			// Initialize the service
+			await gitLabService.initialize();
+
+			// Get project ID from workspace
+			const projectId = await gitLabService.getProjectIdFromWorkspace();
+			if (!projectId) {
+				vscode.window.showErrorMessage('No GitLab remote found in workspace. Please push your project to GitLab first.');
+				return;
+			}
+
+			// Check if worker is already a member
+			const isWorkerMember = await gitLabService.isWorkerMember();
+			if (isWorkerMember) {
+				vscode.window.showInformationMessage('✓ GPU worker is already a member of this project');
+				return;
+			}
+
+			// Share the project
+			await gitLabService.shareProjectWithWorker();
+			vscode.window.showInformationMessage('✓ Successfully shared project with GPU worker');
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Failed to share project: ${errorMessage}`);
+			console.error('Share project error:', error);
+		}
+	});
+
 	// Register manifest generation test command
 	const testManifestDisposable = vscode.commands.registerCommand('codex-worker.testManifestGeneration', async () => {
 		try {
@@ -523,6 +556,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		helloWorldDisposable,
 		testGitLabDisposable,
+		shareProjectDisposable,
 		testManifestDisposable,
 		testAudioDiscoveryDisposable,
 		jobTreeDataProvider,
