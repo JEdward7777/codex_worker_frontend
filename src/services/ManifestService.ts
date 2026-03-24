@@ -246,6 +246,7 @@ export class ManifestService {
         worker_id?: string;
         epochs_completed?: number;
         error_message?: string;
+        status_message?: string;
         response_timestamp?: string;
     } {
         const jobFolder = path.join(jobsDir, `job_${job.job_id}`);
@@ -283,6 +284,7 @@ export class ManifestService {
                 worker_id: response.worker_id,
                 epochs_completed: response.epochs_completed,
                 error_message: response.error_message,
+                status_message: response.status_message,
                 response_timestamp: responseTimestamp
             };
         } catch (error) {

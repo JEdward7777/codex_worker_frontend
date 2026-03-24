@@ -1095,6 +1095,10 @@
             addRow(statusSection, 'Error', data.errorMessage);
         }
 
+        if (data.statusMessage) {
+            addRow(statusSection, 'Status Message', data.statusMessage);
+        }
+
         container.appendChild(statusSection);
 
         // Verse selection section (if applicable)
@@ -1449,6 +1453,13 @@
         const plotWidth = chartWidth - margin.left - margin.right;
         const plotHeight = chartHeight - margin.top - margin.bottom;
 
+        // Helper: check if a value is missing (null, undefined, or NaN).
+        // NaN values from the extension are serialized as null through postMessage,
+        // but we check all three for robustness.
+        function isMissing(v) {
+            return v === null || v === undefined || (typeof v === 'number' && isNaN(v));
+        }
+
         // Calculate data range
         const epochs = metrics.epochs;
         const xMin = Math.min.apply(null, epochs);
@@ -1460,7 +1471,7 @@
             const data = metrics.series[col];
             if (!data) { continue; }
             for (let i = 0; i < data.length; i++) {
-                if (!isNaN(data[i])) {
+                if (!isMissing(data[i])) {
                     if (data[i] < yMin) { yMin = data[i]; }
                     if (data[i] > yMax) { yMax = data[i]; }
                 }
@@ -1601,12 +1612,12 @@
             const isPrimary = PRIMARY_COLUMNS.indexOf(col) !== -1;
             const strokeWidth = isPrimary ? '2.5' : '1.5';
 
-            // Build path data, skipping NaN values
+            // Build path data, skipping missing values but continuing the line
+            // (connecting consecutive valid points with straight lines across gaps)
             let pathData = '';
             let started = false;
             for (let i = 0; i < epochs.length && i < data.length; i++) {
-                if (isNaN(data[i])) {
-                    started = false;
+                if (isMissing(data[i])) {
                     continue;
                 }
                 const x = scaleX(epochs[i]);
@@ -1638,7 +1649,7 @@
                 let bestIdx = -1;
                 let bestVal = Infinity;
                 for (let i = 0; i < epochs.length && i < valData.length; i++) {
-                    if (!isNaN(valData[i]) && valData[i] < bestVal) {
+                    if (!isMissing(valData[i]) && valData[i] < bestVal) {
                         bestVal = valData[i];
                         bestIdx = i;
                     }
@@ -1731,7 +1742,7 @@
             let html = '<strong>Epoch ' + Math.round(epochs[nearestIdx]) + '</strong>';
             for (const col of visibleColumns) {
                 const data = metrics.series[col];
-                if (!data || nearestIdx >= data.length || isNaN(data[nearestIdx])) { continue; }
+                if (!data || nearestIdx >= data.length || isMissing(data[nearestIdx])) { continue; }
                 const val = data[nearestIdx];
                 const color = getMetricColor(col);
 

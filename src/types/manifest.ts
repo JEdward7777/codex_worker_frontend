@@ -107,6 +107,7 @@ export interface WorkerResponse {
     state: JobState;
     epochs_completed?: number;
     error_message?: string;
+    status_message?: string; // Human-readable status/progress message from the worker
     timestamp?: string; // ISO 8601 timestamp
     result?: JobResult; // Result data including checkpoint path
 }
@@ -119,6 +120,7 @@ export interface JobWithState extends Job {
     worker_id?: string;
     epochs_completed?: number;
     error_message?: string;
+    status_message?: string; // Human-readable status/progress message from the worker
     response_timestamp?: string; // ISO 8601 timestamp from the worker response file
 }
 

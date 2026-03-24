@@ -165,6 +165,7 @@ export class JobDetailPanel {
             submittedAt: job.submitted_at,
             responseTimestamp: job.response_timestamp,
             errorMessage: job.error_message,
+            statusMessage: job.status_message,
             canceled: job.canceled ?? false,
             trainingVerseCount: this.countVerses(job.training?.include_verses, job.training?.exclude_verses),
             inferenceVerseCount: this.countVerses(job.inference?.include_verses, job.inference?.exclude_verses),
@@ -344,7 +345,7 @@ export class JobDetailPanel {
             }
 
             const epochs: number[] = [];
-            const series: Record<string, number[]> = {};
+            const series: Record<string, (number | null)[]> = {};
             for (const col of dataColumns) {
                 series[col] = [];
             }
@@ -371,14 +372,18 @@ export class JobDetailPanel {
                 }
                 epochs.push(epoch);
 
-                // Parse each data column
+                // Parse each data column.
+                // Use null (not NaN) for missing/blank values because NaN does not
+                // survive JSON/structured-clone serialization through postMessage —
+                // it becomes null on the webview side, and isNaN(null) === false,
+                // which would cause missing values to be plotted as 0.
                 for (const col of dataColumns) {
                     const colIndex = headers.indexOf(col);
-                    if (colIndex >= 0 && colIndex < values.length) {
+                    if (colIndex >= 0 && colIndex < values.length && values[colIndex] !== '') {
                         const val = parseFloat(values[colIndex]);
-                        series[col].push(isNaN(val) ? NaN : val);
+                        series[col].push(isNaN(val) ? null : val);
                     } else {
-                        series[col].push(NaN);
+                        series[col].push(null);
                     }
                 }
             }
@@ -387,16 +392,16 @@ export class JobDetailPanel {
                 return undefined;
             }
 
-            // Filter out columns that are entirely NaN
+            // Filter out columns that are entirely null (no valid data)
             const validColumns = dataColumns.filter(col =>
-                series[col].some(v => !isNaN(v))
+                series[col].some(v => v !== null)
             );
             if (validColumns.length === 0) {
                 return undefined;
             }
 
             // Remove invalid columns from series
-            const validSeries: Record<string, number[]> = {};
+            const validSeries: Record<string, (number | null)[]> = {};
             for (const col of validColumns) {
                 validSeries[col] = series[col];
             }

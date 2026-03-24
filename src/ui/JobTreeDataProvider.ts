@@ -100,6 +100,10 @@ export class JobTreeItem extends vscode.TreeItem {
             lines.push(`Error: ${this.job.error_message}`);
         }
 
+        if (this.job.status_message) {
+            lines.push(`Status: ${this.job.status_message}`);
+        }
+
         if (this.job.canceled) {
             lines.push('⚠️ Canceled by user');
         }

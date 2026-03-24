@@ -182,8 +182,8 @@ export interface TrainingMetricsData {
     columns: string[];
     /** Epoch numbers (X-axis values) */
     epochs: number[];
-    /** Loss values keyed by column name, each array parallel to epochs[] */
-    series: Record<string, number[]>;
+    /** Loss values keyed by column name, each array parallel to epochs[]. null = missing data point. */
+    series: Record<string, (number | null)[]>;
     /** Whether the known primary columns (train_total_loss, val_total_loss) are present */
     hasPrimaryColumns: boolean;
 }
@@ -222,6 +222,7 @@ export interface JobDetailData {
     submittedAt?: string;
     responseTimestamp?: string;
     errorMessage?: string;
+    statusMessage?: string;
     canceled: boolean;
     trainingVerseCount?: number;
     inferenceVerseCount?: number;
